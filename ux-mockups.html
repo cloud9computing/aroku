@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Health Continuity — UX Mockups</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: #EAE6DC;
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0;
+    padding: 48px 24px 100px;
+  }
+  .page-title {
+    font-family: Georgia, serif;
+    font-size: 32px;
+    color: #3D3A34;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .page-sub {
+    text-align: center;
+    color: #8A8578;
+    font-size: 14px;
+    margin-bottom: 56px;
+  }
+  .gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+    justify-content: center;
+    align-items: flex-start;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .frame-block { width: 300px; }
+  .frame-label {
+    font-family: Georgia, serif;
+    font-size: 13px;
+    color: #8A8578;
+    text-align: center;
+    letter-spacing: 0.03em;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .phone {
+    background: #2C2A26;
+    border-radius: 34px;
+    padding: 10px;
+  }
+  .screen {
+    background: #FBFAF6;
+    border-radius: 26px;
+    overflow: hidden;
+    position: relative;
+    min-height: 400px;
+  }
+  .app-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px 10px; border-bottom: 0.5px solid #EDE8DC;
+  }
+  .who { display: flex; align-items: center; gap: 7px; }
+  .avatar { width: 22px; height: 22px; border-radius: 50%; background: #E3D9EE; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #7A5FA0; }
+  .who-name { font-size: 13px; color: #3D3A34; }
+  .bell { font-size: 15px; color: #9C978A; }
+  .assistant-bar { padding: 10px 18px 14px; }
+  .assistant-inner {
+    display: flex; align-items: center; gap: 3px; background: #F1EEE6; border-radius: 20px; padding: 5px;
+  }
+  .cam-btn { width: 26px; height: 26px; border-radius: 50%; background: #E7D9C9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cam-btn i { font-size: 12px; color: #8A6352; }
+  .assistant-placeholder { flex: 1; font-size: 11px; color: #ADA89A; padding-left: 5px; }
+  .send-btn { width: 24px; height: 24px; border-radius: 50%; background: #E3D9EE; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .send-btn i { font-size: 12px; color: #7A5FA0; }
+  .bottom-nav { display: flex; justify-content: space-around; align-items: center; padding: 10px 8px 16px; border-top: 0.5px solid #EDE8DC; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .nav-item i { font-size: 17px; }
+  .nav-item span { font-size: 8.5px; }
+  .nav-active i, .nav-active span { color: #8A6352; }
+  .nav-inactive i, .nav-inactive span { color: #B0AA9B; }
+  .toggle-pair { display: flex; align-items: center; gap: 2px; background: #F1EEE6; border-radius: 9px; padding: 2px; flex-shrink: 0; }
+  .toggle-btn { width: 18px; height: 18px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .toggle-active { background: #FBFAF6; }
+  .toggle-btn i { font-size: 10px; }
+  .toggle-active i { color: #8A6352; }
+  .toggle-inactive i { color: #B0AA9B; }
+  .chip { font-size: 10px; padding: 4px 9px; border-radius: 20px; white-space: nowrap; }
+  .chip-active { color: #FBFAF6; background: #B0A296; }
+  .chip-orange { color: #8A6352; background: #F3E9E3; }
+  .chip-green { color: #6B7E5C; background: #EDF0E6; }
+  .row-flex { display: flex; gap: 9px; }
+  .icon-circle { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .row-title { font-size: 11px; color: #3D3A34; }
+  .row-date { font-size: 9.5px; color: #B0AA9B; }
+  .row-sub { font-size: 10px; color: #9C978A; margin: 2px 0 0; }
+  .row-sub-unverified { font-size: 10px; color: #9C978A; margin: 2px 0 0; font-style: italic; border-bottom: 1px dotted #C7C2B4; display: inline-block; }
+  .month-label { font-size: 9.5px; letter-spacing: 0.04em; color: #B0AA9B; margin: 0 0 6px; text-transform: uppercase; }
+  .caption {
+    max-width: 300px; margin: 14px auto 0; font-size: 12px; color: #6B675E; line-height: 1.6; text-align: left;
+  }
+  .section-divider { width: 100%; text-align: center; margin: 70px 0 10px; }
+  .section-divider h2 { font-family: Georgia, serif; font-size: 22px; color: #3D3A34; border-bottom: 1px solid #D8D3C4; display: inline-block; padding-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="page-title">Family Health Continuity</div>
+<div class="page-sub">UX mockups — reference gallery, compiled 30 Aug 2026</div>
+
+<div class="gallery">
+
+<!-- RECORDS -->
+<div class="frame-block">
+  <div class="frame-label">Records</div>
+  <div class="phone"><div class="screen" style="display:flex; flex-direction:column; height:620px;">
+    <div class="app-header">
+      <div class="who"><div class="avatar">R</div><span class="who-name">Ramesh</span></div>
+      <i class="ti ti-bell bell"></i>
+    </div>
+    <div style="padding:12px 18px 0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="display:flex; gap:6px;">
+          <span class="chip chip-active">All</span>
+          <span class="chip chip-orange">Carotid</span>
+          <span class="chip chip-green">Diabetes</span>
+        </div>
+        <div class="toggle-pair">
+          <div class="toggle-btn toggle-active"><i class="ti ti-timeline"></i></div>
+          <div class="toggle-btn toggle-inactive"><i class="ti ti-category"></i></div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 18px; flex:1;">
+      <p class="month-label">July 2026</p>
+      <div class="row-flex" style="margin-bottom:11px;">
+        <div class="icon-circle" style="background:#EDF0E6;"><i class="ti ti-flask" style="font-size:12px; color:#6B7E5C;"></i></div>
+        <div style="flex:1; border-bottom:0.5px solid #F1EEE6; padding-bottom:10px;">
+          <div style="display:flex; justify-content:space-between;"><span class="row-title">HbA1c &amp; glucose</span><span class="row-date">20 Jul</span></div>
+          <p class="row-sub">Lab · Metropolis</p>
+        </div>
+      </div>
+      <div class="row-flex" style="margin-bottom:11px;">
+        <div class="icon-circle" style="background:#F3E9E3;"><i class="ti ti-notes" style="font-size:12px; color:#8A6352;"></i></div>
+        <div style="flex:1; border-bottom:0.5px solid #F1EEE6; padding-bottom:10px;">
+          <div style="display:flex; justify-content:space-between;"><span class="row-title">Consultation note</span><span class="row-date">2 Jul</span></div>
+          <p class="row-sub">Dr. Kapoor · Retina</p>
+        </div>
+      </div>
+      <p class="month-label" style="margin-top:4px;">June 2026</p>
+      <div class="row-flex">
+        <div class="icon-circle" style="background:#EDF0E6;"><i class="ti ti-radioactive" style="font-size:12px; color:#6B7E5C;"></i></div>
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between;"><span class="row-title">Carotid duplex scan</span><span class="row-date">12 Jun</span></div>
+          <p class="row-sub-unverified">2 values need a quick check</p>
+        </div>
+      </div>
+    </div>
+    <div class="assistant-bar"><div class="assistant-inner">
+      <div class="cam-btn"><i class="ti ti-camera"></i></div>
+      <span class="assistant-placeholder">Ask, or tell me something new…</span>
+      <div class="send-btn"><i class="ti ti-arrow-up"></i></div>
+    </div></div>
+    <div class="bottom-nav">
+      <div class="nav-item nav-active"><i class="ti ti-folder"></i><span>Records</span></div>
+      <div class="nav-item nav-inactive"><i class="ti ti-pill"></i><span>Medicines</span></div>
+      <div class="nav-item nav-inactive"><i class="ti ti-calendar"></i><span>Visits</span></div>
+    </div>
+  </div></div>
+  <p class="caption">Default: chronological timeline, one row per document. Filter chips by <em>condition</em>, not doc type. Toggle (top-right) swaps to By-type grouping. Capture lives in the assistant bar's camera icon — no separate button.</p>
+</div>
+
+<!-- MEDICINES -->
+<div class="frame-block">
+  <div class="frame-label">Medicines · Today</div>
+  <div class="phone"><div class="screen" style="display:flex; flex-direction:column; height:620px;">
+    <div class="app-header">
+      <div class="who"><div class="avatar">R</div><span class="who-name">Ramesh</span></div>
+      <i class="ti ti-bell bell"></i>
+    </div>
+    <div style="padding:12px 18px 0; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <span style="font-size:10px; color:#B0AA9B;">14 doses today</span>
+      <div class="toggle-pair">
+        <div class="toggle-btn toggle-active"><i class="ti ti-clock"></i></div>
+        <div class="toggle-btn toggle-inactive"><i class="ti ti-list"></i></div>
+      </div>
+    </div>
+    <div style="padding:0 18px; flex:1;">
+      <div style="display:flex; align-items:center; gap:5px; margin-bottom:7px;">
+        <i class="ti ti-sunrise" style="font-size:12px; color:#C9A05C;"></i>
+        <span style="font-size:9.5px; letter-spacing:0.03em; color:#9C978A; text-transform:uppercase;">Morning</span>
+      </div>
+      <div style="background:#FBFAF6; border:0.5px solid #E7E2D6; border-radius:11px; padding:3px 11px; margin-bottom:14px;">
+        <div style="padding:7px 0; border-bottom:0.5px solid #F1EEE6;"><span style="font-size:11px; color:#3D3A34;">Metformin 500 <span style="font-size:9.5px; color:#B0AA9B;">after food</span></span></div>
+        <div style="padding:7px 0; border-bottom:0.5px solid #F1EEE6;"><span style="font-size:11px; color:#3D3A34;">Aspirin 75 <span style="font-size:9.5px; color:#B0AA9B;">after food</span></span></div>
+        <div style="padding:7px 0;"><span style="font-size:11px; color:#3D3A34;">Atorvastatin 40 <span style="font-size:9.5px; color:#B0AA9B;">before food</span></span></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:5px; margin-bottom:7px;">
+        <i class="ti ti-moon-stars" style="font-size:12px; color:#8A93B0;"></i>
+        <span style="font-size:9.5px; letter-spacing:0.03em; color:#9C978A; text-transform:uppercase;">Night</span>
+      </div>
+      <div style="background:#FBFAF6; border:0.5px solid #E7E2D6; border-radius:11px; padding:3px 11px;">
+        <div style="padding:7px 0; border-bottom:0.5px solid #F1EEE6;"><span style="font-size:11px; color:#3D3A34;">Metoprolol 25 <span style="font-size:9.5px; color:#B0AA9B;">after food</span></span></div>
+        <div style="padding:7px 0;"><span style="font-size:11px; color:#3D3A34;">Clopidogrel 75 <span style="font-size:9.5px; color:#B0AA9B;">after food</span></span></div>
+      </div>
+    </div>
+    <div class="assistant-bar"><div class="assistant-inner">
+      <div class="cam-btn"><i class="ti ti-camera"></i></div>
+      <span class="assistant-placeholder">Ask, or tell me something new…</span>
+      <div class="send-btn"><i class="ti ti-arrow-up"></i></div>
+    </div></div>
+    <div class="bottom-nav">
+      <div class="nav-item nav-inactive"><i class="ti ti-folder"></i><span>Records</span></div>
+      <div class="nav-item nav-active"><i class="ti ti-pill"></i><span>Medicines</span></div>
+      <div class="nav-item nav-inactive"><i class="ti ti-calendar"></i><span>Visits</span></div>
+    </div>
+  </div></div>
+  <p class="caption">Grouped by time of day, food relation as a muted note. Toggle swaps to All (Active/Stopped, grouped by molecule). Duplicate-molecule grouping is neutral display, never a flagged warning.</p>
+</div>
+
+<!-- VISITS -->
+<div class="frame-block">
+  <div class="frame-label">Visits</div>
+  <div class="phone"><div class="screen" style="display:flex; flex-direction:column; height:620px;">
+    <div class="app-header">
+      <div class="who"><div class="avatar">R</div><span class="who-name">Ramesh</span></div>
+      <i class="ti ti-bell bell"></i>
+    </div>
+    <div style="padding:12px 18px 0; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <div style="display:flex; gap:6px;">
+        <span class="chip chip-active">All</span>
+        <span class="chip chip-orange">Cardiology</span>
+      </div>
+      <div class="toggle-pair">
+        <div class="toggle-btn toggle-active"><i class="ti ti-timeline"></i></div>
+        <div class="toggle-btn toggle-inactive"><i class="ti ti-user"></i></div>
+      </div>
+    </div>
+    <div style="padding:0 18px; flex:1; position:relative;">
+      <div style="position:absolute; left:21.5px; top:6px; bottom:6px; width:1px; background:#EDE8DC;"></div>
+      <div class="row-flex" style="margin-bottom:12px;">
+        <div style="width:9px; height:9px; border-radius:50%; background:#8A6352; margin-top:4px; flex-shrink:0; z-index:1; margin-left:4px;"></div>
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between;"><span class="row-title">Dr. Nair · Cardiology</span><span style="font-size:9.5px; color:#8A6352;">Tomorrow</span></div>
+          <p style="font-size:10px; color:#6B7E5C; margin:2px 0 0;">Brief ready · 3 questions kept</p>
+        </div>
+      </div>
+      <div class="row-flex" style="margin-bottom:12px;">
+        <div style="width:9px; height:9px; border-radius:50%; background:#FBFAF6; border:1.5px solid #C7C2B4; margin-top:4px; flex-shrink:0; z-index:1; margin-left:4px;"></div>
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between;"><span class="row-title">Dr. Kapoor · Retina</span><span class="row-date">2 Jul</span></div>
+          <p class="row-sub">PRP laser, R eye</p>
+        </div>
+      </div>
+      <div class="row-flex">
+        <div style="width:9px; height:9px; border-radius:50%; background:#FBFAF6; border:1.5px solid #C7C2B4; margin-top:4px; flex-shrink:0; z-index:1; margin-left:4px;"></div>
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between;"><span class="row-title">Dr. Iyer · Vascular</span><span class="row-date">12 Jun</span></div>
+          <p class="row-sub">Carotid duplex reviewed</p>
+        </div>
+      </div>
+    </div>
+    <div class="assistant-bar"><div class="assistant-inner">
+      <div class="cam-btn"><i class="ti ti-camera"></i></div>
+      <span class="assistant-placeholder">Ask, or tell me something new…</span>
+      <div class="send-btn"><i class="ti ti-arrow-up"></i></div>
+    </div></div>
+    <div class="bottom-nav">
+      <div class="nav-item nav-inactive"><i class="ti ti-folder"></i><span>Records</span></div>
+      <div class="nav-item nav-inactive"><i class="ti ti-pill"></i><span>Medicines</span></div>
+      <div class="nav-item nav-active"><i class="ti ti-calendar"></i><span>Visits</span></div>
+    </div>
+  </div></div>
+  <p class="caption">One continuous timeline, upcoming + past mixed. Filled dot = upcoming (needs prep), hollow = past. Toggle swaps to By-doctor grouping. Filter chips by specialty.</p>
+</div>
+
+<!-- VISIT DETAIL -->
+<div class="frame-block">
+  <div class="frame-label">Visit detail</div>
+  <div class="phone"><div class="screen" style="display:flex; flex-direction:column; height:620px;">
+    <div class="app-header">
+      <div class="who"><div class="avatar">R</div><span class="who-name">Ramesh</span></div>
+      <i class="ti ti-arrow-left" style="font-size:15px; color:#9C978A;"></i>
+    </div>
+    <div style="padding:18px 18px 0; flex:1;">
+      <p style="font-family:Georgia,serif; font-size:17px; color:#3D3A34; margin:0 0 3px;">Dr. Nair · Cardiology</p>
+      <p style="font-size:11px; color:#9C978A; margin:0 0 14px;">Tomorrow, 7 Aug · 4:30 PM</p>
+      <div style="display:flex; align-items:center; gap:9px; background:#EDF0E6; border-radius:12px; padding:11px 12px; margin-bottom:14px;">
+        <div style="width:26px; height:26px; border-radius:50%; background:#FBFAF6; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="ti ti-microphone" style="font-size:12px; color:#6B7E5C;"></i></div>
+        <div style="flex:1;">
+          <p style="font-size:11px; color:#4A5540; margin:0;">Record this consultation</p>
+          <p style="font-size:9.5px; color:#8FA383; margin:1px 0 0;">Dr. Nair OK'd recording</p>
+        </div>
+      </div>
+      <p style="font-size:9.5px; letter-spacing:0.04em; color:#B0AA9B; margin:0 0 8px; text-transform:uppercase;">Your prep brief</p>
+      <div style="background:#FBFAF6; border:0.5px solid #E7E2D6; border-radius:12px; padding:11px 13px; margin-bottom:12px;">
+        <p style="font-size:9.5px; letter-spacing:0.04em; color:#6B7E5C; margin:0 0 5px; text-transform:uppercase;">Since your last visit</p>
+        <p style="font-size:11px; color:#4A5540; margin:0 0 3px; line-height:1.5;">Vascular · Dr. Iyer, 12 Jun — carotid duplex 60–70%.</p>
+        <p style="font-size:11px; color:#4A5540; margin:0; line-height:1.5;">Endo · Dr. Menon, 20 Jul — HbA1c 7.4, improved.</p>
+      </div>
+      <p style="font-size:9.5px; letter-spacing:0.04em; color:#B0AA9B; margin:0 0 8px; text-transform:uppercase;">Questions</p>
+      <div style="display:flex; gap:8px;">
+        <span style="width:5px; height:5px; border-radius:50%; background:#D4A9A0; margin-top:5px; flex-shrink:0;"></span>
+        <p style="font-size:11px; color:#4A453D; line-height:1.5; margin:0;">Anti-VEGF injection planned Sep — anything to consider with clopidogrel?</p>
+      </div>
+    </div>
+    <div class="assistant-bar"><div class="assistant-inner">
+      <div class="cam-btn"><i class="ti ti-camera"></i></div>
+      <span class="assistant-placeholder">Ask, or tell me something new…</span>
+      <div class="send-btn"><i class="ti ti-arrow-up"></i></div>
+    </div></div>
+  </div></div>
+  <p class="caption">Record-consultation lives here, scoped to this doctor's consent state — not a global action. Brief sits directly below on the same screen.</p>
+</div>
+
+<!-- PERSON SWITCHER -->
+<div class="frame-block">
+  <div class="frame-label">Person switcher</div>
+  <div class="phone"><div class="screen" style="min-height:340px;">
+    <div class="app-header">
+      <div class="who"><div class="avatar">R</div><span class="who-name">Ramesh</span> <i class="ti ti-chevron-up" style="font-size:12px; color:#B0AA9B;"></i></div>
+      <i class="ti ti-bell bell"></i>
+    </div>
+    <div style="padding:8px; position:relative;">
+      <div style="background:#FFFFFF; border-radius:14px; box-shadow:0 8px 20px rgba(0,0,0,0.10); padding:6px;">
+        <div style="display:flex; align-items:center; gap:9px; padding:10px; border-radius:10px; background:#F1EEE6;">
+          <div class="avatar">R</div><span style="font-size:12.5px; color:#3D3A34;">Ramesh</span>
+          <i class="ti ti-check" style="font-size:12px; color:#8FA383; margin-left:auto;"></i>
+        </div>
+        <div style="display:flex; align-items:center; gap:9px; padding:10px;">
+          <div style="width:22px; height:22px; border-radius:50%; background:#F3E9E3; display:flex; align-items:center; justify-content:center; font-size:10px; color:#8A6352;">S</div>
+          <span style="font-size:12.5px; color:#4A453D;">Sunita (mother)</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:9px; padding:10px;">
+          <div style="width:22px; height:22px; border-radius:50%; background:#EDF0E6; display:flex; align-items:center; justify-content:center;"><i class="ti ti-paw" style="font-size:10px; color:#6B7E5C;"></i></div>
+          <span style="font-size:12.5px; color:#4A453D;">Bruno</span>
+        </div>
+        <div style="height:1px; background:#F1EEE6; margin:4px 6px;"></div>
+        <div style="display:flex; align-items:center; gap:9px; padding:9px 10px;">
+          <i class="ti ti-plus" style="font-size:12px; color:#B0AA9B;"></i>
+          <span style="font-size:11.5px; color:#9C978A;">Add family member</span>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <p class="caption">Just people (and pets) — no Family tab. Care team, caregivers, and consent settings live one level deeper from here, not on the main nav.</p>
+</div>
+
+<!-- VISIT CONFIRMATION -->
+<div class="frame-block">
+  <div class="frame-label">Creating a visit, via the assistant</div>
+  <div class="phone"><div class="screen" style="min-height:460px;">
+    <div class="app-header">
+      <div class="who"><div class="avatar">R</div><span class="who-name">Ramesh</span></div>
+      <i class="ti ti-x" style="font-size:14px; color:#9C978A;"></i>
+    </div>
+    <div style="padding:16px 18px 0;">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
+        <p style="font-size:11px; color:#3D3A34; background:#EDE8DC; padding:8px 12px; border-radius:14px; border-top-right-radius:3px; max-width:80%; margin:0; line-height:1.5;">Appointment with Dr Nair next Thursday around 4:30</p>
+      </div>
+      <div style="display:flex; gap:7px; align-items:flex-start; margin-bottom:10px;">
+        <div style="width:18px; height:18px; border-radius:50%; background:#E3D9EE; flex-shrink:0; display:flex; align-items:center; justify-content:center; margin-top:2px;"><i class="ti ti-sparkles" style="font-size:9px; color:#7A5FA0;"></i></div>
+        <p style="font-size:11px; color:#7A756A; margin:2px 0 0; line-height:1.5;">I'll add this as an upcoming visit — take a look before I save it.</p>
+      </div>
+      <div style="background:#FBFAF6; border:0.5px solid #E7E2D6; border-radius:13px; padding:12px 13px; margin-left:25px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:0.5px solid #F1EEE6;">
+          <div><p style="font-size:9px; color:#B0AA9B; margin:0 0 2px; text-transform:uppercase;">Doctor</p><p style="font-size:11px; color:#3D3A34; margin:0;">Dr. S. Nair · Cardiology</p></div>
+          <i class="ti ti-pencil" style="font-size:11px; color:#B0AA9B;"></i>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:0.5px solid #F1EEE6;">
+          <div><p style="font-size:9px; color:#B0AA9B; margin:0 0 2px; text-transform:uppercase;">Date &amp; time</p><p style="font-size:11px; color:#3D3A34; margin:0;">Thu, 3 Sep · 4:30 PM</p></div>
+          <i class="ti ti-pencil" style="font-size:11px; color:#B0AA9B;"></i>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 0;">
+          <div><p style="font-size:9px; color:#B0AA9B; margin:0 0 2px; text-transform:uppercase;">Reason</p><p style="font-size:11px; color:#3D3A34; margin:0;">Not set — add one?</p></div>
+          <i class="ti ti-pencil" style="font-size:11px; color:#B0AA9B;"></i>
+        </div>
+      </div>
+      <div style="margin-left:25px; display:flex; gap:8px;">
+        <button style="flex:1; background:#E7D9C9; border:none; color:#8A6352; font-size:11px; padding:9px; border-radius:11px;">Add to visits</button>
+        <button style="background:none; border:0.5px solid #E7E2D6; color:#9C978A; font-size:11px; padding:9px 14px; border-radius:11px;">Not now</button>
+      </div>
+    </div>
+  </div></div>
+  <p class="caption">Every AI-proposed write goes through a confirm-before-save card. Doctor is matched, not assumed. "Not now" discards the draft entirely — nothing half-real ever lingers in the data.</p>
+</div>
+
+</div>
+
+</body>
+</html>

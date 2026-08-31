@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Deliberately NOT a cross-service call to Firestore (firestore.get) — that
+    // path failed in production ("user does not have permission to access") even
+    // with correct membership data. The user's familyId is instead baked into
+    // their Auth ID token as a custom claim (see functions/src/index.ts:
+    // syncFamilyClaim), kept in sync on every app load.
+    function isFamilyMember(familyId) {
+      return request.auth != null && request.auth.token.familyId == familyId;
+    }
+
+    match /families/{familyId}/{allPaths=**} {
+      allow read, write: if isFamilyMember(familyId);
+    }
+  }
+}

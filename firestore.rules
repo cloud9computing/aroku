@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isFamilyMember(familyId) {
+      return isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids;
+    }
+
+    // Each user's own profile pointer to their family.
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Invite codes only ever resolve to a familyId — never expose family contents here.
+    // Only an existing member of a family may mint a new invite code for it,
+    // so a stranger can't fabricate a code that maps to someone else's family.
+    match /invites/{code} {
+      allow get: if isSignedIn();
+      allow create: if isFamilyMember(request.resource.data.familyId);
+      allow update, delete: if false;
+    }
+
+    match /families/{familyId} {
+      allow read: if isFamilyMember(familyId);
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.memberUids;
+
+      // Existing members can update anything except who created the family.
+      // A non-member holding a valid invite code (already resolved client-side
+      // via the /invites lookup) may join by adding ONLY themselves to
+      // memberUids/members — no other field may change in that case.
+      allow update: if isSignedIn() && (
+        (isFamilyMember(familyId) && request.resource.data.createdBy == resource.data.createdBy) ||
+        (
+          !(request.auth.uid in resource.data.memberUids) &&
+          request.auth.uid in request.resource.data.memberUids &&
+          request.resource.data.memberUids.size() == resource.data.memberUids.size() + 1 &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'members'])
+        )
+      );
+      allow delete: if false;
+
+      match /{collection}/{docId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+    }
+  }
+}
