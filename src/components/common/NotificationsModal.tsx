@@ -1,12 +1,13 @@
 import React from 'react';
 import { AppNotification } from '../../types';
-import { IconBell, IconCheck, IconFileAlert, IconX } from '@tabler/icons-react';
+import { IconBell, IconCalendarEvent, IconCheck, IconFileAlert, IconX } from '@tabler/icons-react';
 
 interface NotificationsModalProps {
   isOpen: boolean;
   notifications: AppNotification[];
   onMarkRead: (id: string) => void;
-  onNavigateToVerify?: () => void;
+  onNavigateToRecords?: () => void;
+  onNavigateToVisits?: () => void;
   onClose: () => void;
 }
 
@@ -14,7 +15,8 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   isOpen,
   notifications,
   onMarkRead,
-  onNavigateToVerify,
+  onNavigateToRecords,
+  onNavigateToVisits,
   onClose,
 }) => {
   if (!isOpen) return null;
@@ -53,6 +55,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                       <div className="w-5 h-5 rounded-full bg-ochre-light text-ochre flex items-center justify-center flex-shrink-0 mt-0.5">
                         <IconFileAlert size={12} />
                       </div>
+                    ) : notif.type === 'upcoming_visit' || notif.type === 'upcoming_test' ? (
+                      <div className="w-5 h-5 rounded-full bg-terracotta-light text-terracotta flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <IconCalendarEvent size={12} />
+                      </div>
                     ) : (
                       <div className="w-5 h-5 rounded-full bg-sage-light text-sage flex items-center justify-center flex-shrink-0 mt-0.5">
                         <IconBell size={12} />
@@ -74,15 +80,27 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                   )}
                 </div>
 
-                {notif.type === 'verify' && onNavigateToVerify && (
+                {(notif.type === 'verify' || notif.type === 'upcoming_test') && onNavigateToRecords && (
                   <button
                     onClick={() => {
                       onClose();
-                      onNavigateToVerify();
+                      onNavigateToRecords();
                     }}
                     className="mt-2 text-[10.5px] text-terracotta font-medium hover:underline block"
                   >
-                    Review in Records →
+                    {notif.type === 'verify' ? 'Review in Records →' : 'View in Records →'}
+                  </button>
+                )}
+
+                {notif.type === 'upcoming_visit' && onNavigateToVisits && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onNavigateToVisits();
+                    }}
+                    className="mt-2 text-[10.5px] text-terracotta font-medium hover:underline block"
+                  >
+                    View in Visits →
                   </button>
                 )}
               </div>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { DocumentRecord } from '../../types';
-import { computeFactNameClusters, applyFactNameRename } from '../../utils/factNameClusters';
+import { computeFactNameClusters, applyFactNameRename, FactNameCluster } from '../../utils/factNameClusters';
 import { IconCheck, IconTags, IconX, IconArrowsSplit } from '@tabler/icons-react';
 
 interface StandardizeNamesModalProps {
@@ -23,12 +23,13 @@ export const StandardizeNamesModal: React.FC<StandardizeNamesModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleMerge = (clusterKey: string) => {
-    const canonicalName = (drafts[clusterKey] ?? clusters.find((c) => c.key === clusterKey)?.suggestedName ?? '').trim();
+  const handleMerge = (cluster: FactNameCluster) => {
+    const canonicalName = (drafts[cluster.key] ?? cluster.suggestedName).trim();
     if (!canonicalName) return;
-    const changed = applyFactNameRename(records, clusterKey, canonicalName);
+    const variantNames = cluster.variants.map((v) => v.name);
+    const changed = applyFactNameRename(records, variantNames, canonicalName);
     changed.forEach(onUpdateRecord);
-    setMergedKeys((prev) => new Set(prev).add(clusterKey));
+    setMergedKeys((prev) => new Set(prev).add(cluster.key));
   };
 
   const handleKeepSeparate = (clusterKey: string) => {
@@ -94,7 +95,7 @@ export const StandardizeNamesModal: React.FC<StandardizeNamesModalProps> = ({
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleMerge(cluster.key)}
+                    onClick={() => handleMerge(cluster)}
                     className="flex-1 py-2 bg-terracotta-light text-terracotta rounded-lg text-xs font-medium hover:opacity-90 transition-all"
                   >
                     Merge into one name

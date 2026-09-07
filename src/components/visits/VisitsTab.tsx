@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Person, Visit, Medication, DocumentRecord } from '../../types';
-import { IconTimeline, IconUser } from '@tabler/icons-react';
+import { Person, Visit, Medication, DocumentRecord, CareTeamMember, PendingNote } from '../../types';
+import { IconAlertTriangle, IconTimeline, IconUser } from '@tabler/icons-react';
 import { VisitDetailView } from './VisitDetailView';
 import { PastVisitRecapModal } from './PastVisitRecapModal';
+import { isOverdue } from '../../utils/dueDates';
 
 interface VisitsTabProps {
   familyId: string;
@@ -10,8 +11,13 @@ interface VisitsTabProps {
   visits: Visit[];
   medications: Medication[];
   records: DocumentRecord[];
+  careTeam: CareTeamMember[];
+  pendingNotes: PendingNote[];
   onUpdateVisit: (visit: Visit) => void;
   onDeleteVisit: (visitId: string) => void;
+  onResolvePendingNote: (noteId: string) => void;
+  onAddRecord: (record: DocumentRecord) => void;
+  onAddDoctor: (doctor: CareTeamMember) => void;
 }
 
 export const VisitsTab: React.FC<VisitsTabProps> = ({
@@ -20,8 +26,13 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
   visits,
   medications,
   records,
+  careTeam,
+  pendingNotes,
   onUpdateVisit,
   onDeleteVisit,
+  onResolvePendingNote,
+  onAddRecord,
+  onAddDoctor,
 }) => {
   const [viewMode, setViewMode] = useState<'timeline' | 'by_doctor'>('timeline');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('All');
@@ -61,6 +72,9 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
         person={person}
         medications={medications}
         records={records}
+        visits={visits}
+        careTeam={careTeam}
+        pendingNotes={pendingNotes}
         onBack={() => setActiveUpcomingVisit(null)}
         onUpdateVisit={(updated) => {
           onUpdateVisit(updated);
@@ -70,12 +84,15 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
           onDeleteVisit(visitId);
           setActiveUpcomingVisit(null);
         }}
+        onResolvePendingNote={onResolvePendingNote}
+        onAddRecord={onAddRecord}
+        onAddDoctor={onAddDoctor}
       />
     );
   }
 
   return (
-    <div className="flex flex-col flex-1 pb-4">
+    <div className="flex flex-col flex-1 min-h-0 pb-4">
       {/* Specialty Filter & View Mode Toggle */}
       <div className="px-4.5 pt-3 pb-2 flex items-center justify-between gap-2 select-none">
         {/* Specialty Filter Chips */}
@@ -124,7 +141,7 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
       </div>
 
       {/* Main List */}
-      <div className="px-4.5 flex-1 overflow-y-auto pt-1">
+      <div className="px-4.5 flex-1 min-h-0 overflow-y-auto pt-1">
         {viewMode === 'timeline' ? (
           <div className="relative pl-1">
             {/* Timeline Vertical Line */}
@@ -133,6 +150,7 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
             <div className="space-y-4">
               {filteredVisits.map((visit) => {
                 const isUpcoming = visit.is_upcoming;
+                const overdue = isUpcoming && isOverdue(visit.date);
 
                 return (
                   <div
@@ -145,7 +163,11 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
                   >
                     {/* Dot Stem */}
                     {isUpcoming ? (
-                      <div className="w-[9px] h-[9px] rounded-full bg-terracotta mt-1 flex-shrink-0 z-10 shadow-2xs group-hover:scale-125 transition-transform" />
+                      <div
+                        className={`w-[9px] h-[9px] rounded-full mt-1 flex-shrink-0 z-10 shadow-2xs group-hover:scale-125 transition-transform ${
+                          overdue ? 'bg-ochre' : 'bg-terracotta'
+                        }`}
+                      />
                     ) : (
                       <div className="w-[9px] h-[9px] rounded-full bg-paper-50 border-[1.5px] border-paper-700 mt-1 flex-shrink-0 z-10 group-hover:border-terracotta transition-colors" />
                     )}
@@ -158,14 +180,18 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
                         </span>
                         <span
                           className={`text-[9.5px] font-normal ${
-                            isUpcoming ? 'text-terracotta font-medium' : 'text-ink-200'
+                            overdue ? 'text-ochre font-semibold' : isUpcoming ? 'text-terracotta font-medium' : 'text-ink-200'
                           }`}
                         >
                           {visit.date_display}
                         </span>
                       </div>
 
-                      {isUpcoming ? (
+                      {overdue ? (
+                        <p className="text-[10px] text-ochre font-medium mt-0.5 flex items-center gap-1">
+                          <IconAlertTriangle size={11} /> Overdue — mark as complete or reschedule
+                        </p>
+                      ) : isUpcoming ? (
                         <p className="text-[10px] text-sage font-medium mt-0.5">
                           {visit.brief_status || 'Brief ready · Questions prepped'}
                         </p>
@@ -196,32 +222,44 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  {docVisits.map((v) => (
-                    <div
-                      key={v.id}
-                      onClick={() => {
-                        if (v.is_upcoming) setActiveUpcomingVisit(v);
-                        else setActivePastVisit(v);
-                      }}
-                      className="flex justify-between items-center text-xs p-1.5 rounded-lg hover:bg-paper-400 cursor-pointer"
-                    >
-                      <div>
-                        <p className="text-[11px] font-medium text-ink-800">
-                          {v.date_display} · {v.specialty}
-                        </p>
-                        <p className="text-[10px] text-ink-400">
-                          {v.is_upcoming ? 'Upcoming appointment' : v.past_recap?.what_happened || 'Past visit'}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                          v.is_upcoming ? 'bg-terracotta-light text-terracotta' : 'bg-paper-400 text-ink-500'
-                        }`}
+                  {docVisits.map((v) => {
+                    const overdue = v.is_upcoming && isOverdue(v.date);
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => {
+                          if (v.is_upcoming) setActiveUpcomingVisit(v);
+                          else setActivePastVisit(v);
+                        }}
+                        className="flex justify-between items-center text-xs p-1.5 rounded-lg hover:bg-paper-400 cursor-pointer"
                       >
-                        {v.is_upcoming ? 'Upcoming' : 'Past'}
-                      </span>
-                    </div>
-                  ))}
+                        <div>
+                          <p className="text-[11px] font-medium text-ink-800">
+                            {v.date_display} · {v.specialty}
+                          </p>
+                          <p className="text-[10px] text-ink-400">
+                            {overdue
+                              ? 'Overdue — not yet marked complete'
+                              : v.is_upcoming
+                              ? 'Upcoming appointment'
+                              : v.past_recap?.what_happened || 'Past visit'}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-medium flex items-center gap-1 ${
+                            overdue
+                              ? 'bg-ochre-light text-ochre'
+                              : v.is_upcoming
+                              ? 'bg-terracotta-light text-terracotta'
+                              : 'bg-paper-400 text-ink-500'
+                          }`}
+                        >
+                          {overdue && <IconAlertTriangle size={10} />}
+                          {overdue ? 'Overdue' : v.is_upcoming ? 'Upcoming' : 'Past'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -233,6 +271,10 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
       <PastVisitRecapModal
         visit={activePastVisit}
         isOpen={Boolean(activePastVisit)}
+        onUpdateVisit={(updated) => {
+          onUpdateVisit(updated);
+          setActivePastVisit(updated);
+        }}
         onDeleteVisit={(visitId) => {
           onDeleteVisit(visitId);
           setActivePastVisit(null);

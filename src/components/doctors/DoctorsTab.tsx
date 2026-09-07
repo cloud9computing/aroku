@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { CareTeamMember } from '../../types';
+import { CareTeamMember, Species } from '../../types';
 import { IconMapPin, IconMicrophoneOff, IconPhone, IconPlus, IconStethoscope } from '@tabler/icons-react';
+import { filterDoctorsForSpecies, patientTypeForSpecies } from '../../utils/careTeam';
+import { buildDirectionsUrl } from '../../utils/directions';
 import { AddDoctorModal } from './AddDoctorModal';
 import { DoctorDetailModal } from './DoctorDetailModal';
 
 interface DoctorsTabProps {
   doctors: CareTeamMember[];
+  personSpecies: Species;
   onAddDoctor: (doctor: CareTeamMember) => void;
   onUpdateDoctor: (doctor: CareTeamMember) => void;
   onDeleteDoctor: (doctorId: string) => void;
@@ -13,6 +16,7 @@ interface DoctorsTabProps {
 
 export const DoctorsTab: React.FC<DoctorsTabProps> = ({
   doctors,
+  personSpecies,
   onAddDoctor,
   onUpdateDoctor,
   onDeleteDoctor,
@@ -20,13 +24,14 @@ export const DoctorsTab: React.FC<DoctorsTabProps> = ({
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<CareTeamMember | null>(null);
 
-  const sorted = [...doctors].sort((a, b) => a.name.localeCompare(b.name));
+  const scopedDoctors = filterDoctorsForSpecies(doctors, personSpecies);
+  const sorted = [...scopedDoctors].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="flex flex-col flex-1 pb-4">
+    <div className="flex flex-col flex-1 min-h-0 pb-4">
       <div className="px-4.5 pt-3 pb-2 flex items-center justify-between select-none">
         <span className="text-[10px] text-ink-200 font-medium">
-          {doctors.length} {doctors.length === 1 ? 'doctor' : 'doctors'} saved
+          {sorted.length} {sorted.length === 1 ? 'doctor' : 'doctors'} saved
         </span>
         <button
           onClick={() => setIsAddOpen(true)}
@@ -36,15 +41,16 @@ export const DoctorsTab: React.FC<DoctorsTabProps> = ({
         </button>
       </div>
 
-      <div className="px-4.5 flex-1 overflow-y-auto space-y-2">
+      <div className="px-4.5 flex-1 min-h-0 overflow-y-auto space-y-2">
         {sorted.length === 0 ? (
           <div className="text-center py-14 space-y-2">
             <div className="w-11 h-11 rounded-full bg-terracotta-light text-terracotta flex items-center justify-center mx-auto">
               <IconStethoscope size={20} />
             </div>
             <p className="text-xs text-ink-400 max-w-[220px] mx-auto leading-relaxed">
-              Keep every doctor your family sees — or has been recommended — in one place, with their
-              contact details.
+              {personSpecies === 'human'
+                ? 'Keep every doctor your family sees — or has been recommended — in one place, with their contact details.'
+                : "Keep every vet this pet sees — or has been recommended — in one place, with their contact details."}
             </p>
           </div>
         ) : (
@@ -69,16 +75,26 @@ export const DoctorsTab: React.FC<DoctorsTabProps> = ({
               </div>
 
               {(doc.phone || doc.address) && (
-                <div className="flex gap-3 mt-2 pt-2 border-t border-paper-400/80 text-[10px] text-ink-500">
+                <div className="flex gap-2 mt-2 pt-2 border-t border-paper-400/80">
                   {doc.phone && (
-                    <span className="flex items-center gap-1">
-                      <IconPhone size={11} /> {doc.phone}
-                    </span>
+                    <a
+                      href={`tel:${doc.phone.replace(/\s+/g, '')}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 py-1.5 bg-sage-light text-sage-dark rounded-lg text-[10.5px] font-medium flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    >
+                      <IconPhone size={12} /> Call
+                    </a>
                   )}
                   {doc.address && (
-                    <span className="flex items-center gap-1 truncate">
-                      <IconMapPin size={11} className="flex-shrink-0" /> <span className="truncate">{doc.address}</span>
-                    </span>
+                    <a
+                      href={buildDirectionsUrl(doc.address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 py-1.5 bg-lavender-light text-lavender rounded-lg text-[10.5px] font-medium flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    >
+                      <IconMapPin size={12} /> Directions
+                    </a>
                   )}
                 </div>
               )}
@@ -87,7 +103,12 @@ export const DoctorsTab: React.FC<DoctorsTabProps> = ({
         )}
       </div>
 
-      <AddDoctorModal isOpen={isAddOpen} onAddDoctor={onAddDoctor} onClose={() => setIsAddOpen(false)} />
+      <AddDoctorModal
+        isOpen={isAddOpen}
+        defaultPatientType={patientTypeForSpecies(personSpecies)}
+        onAddDoctor={onAddDoctor}
+        onClose={() => setIsAddOpen(false)}
+      />
 
       <DoctorDetailModal
         doctor={selectedDoctor}

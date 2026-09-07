@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AssistantResponse, ChatMessage, ProposedVisit, ProposedMedication, ProposedMedicationUpdate } from '../../services/assistantEngine';
-import { Person, Visit, Medication, DocumentRecord, TimeOfDay, FoodRelation } from '../../types';
+import { AssistantResponse, ChatMessage, ProposedVisit, ProposedMedication, ProposedMedicationUpdate, ProposedScheduledTest } from '../../services/assistantEngine';
+import { Person, Visit, Medication, DocumentRecord, TimeOfDay, FoodRelation, PendingNote } from '../../types';
 import {
   findExistingActiveMedication,
   findActiveMedicationsByMolecule,
   sameMoleculeAndStrength,
   normalize,
 } from '../../utils/duplicateMedication';
-import { computeFactTrends, findFactTrend } from '../../utils/factTrends';
+import { computeFactTrends, findFactTrend, FactTrend } from '../../utils/factTrends';
 import { TrendDisplay } from '../common/TrendDisplay';
 import { medicineDisplayName } from '../../utils/medicineName';
+import { monthYearFromDate } from '../../utils/recordDate';
 import {
   IconArrowUp,
   IconCheck,
@@ -30,6 +31,8 @@ interface AssistantDrawerProps {
   onConfirmAddVisit: (visit: Visit) => void;
   onConfirmAddMedication: (medication: Medication) => void;
   onConfirmUpdateMedication: (medication: Medication) => void;
+  onConfirmAddNote: (note: PendingNote) => void;
+  onConfirmScheduleTest: (record: DocumentRecord) => void;
   onClose: () => void;
 }
 
@@ -57,12 +60,15 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
   onConfirmAddVisit,
   onConfirmAddMedication,
   onConfirmUpdateMedication,
+  onConfirmAddNote,
+  onConfirmScheduleTest,
   onClose,
 }) => {
   const [editingField, setEditingField] = useState<{ msgId: string; field: string } | null>(null);
   const [visitDrafts, setVisitDrafts] = useState<Record<string, ProposedVisit>>({});
   const [medicationDrafts, setMedicationDrafts] = useState<Record<string, ProposedMedication>>({});
   const [medicationListDrafts, setMedicationListDrafts] = useState<Record<string, PendingChatMedication[]>>({});
+  const [scheduledTestDrafts, setScheduledTestDrafts] = useState<Record<string, ProposedScheduledTest>>({});
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [inputText, setInputText] = useState('');
@@ -81,6 +87,9 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
 
   const getMedicationDraft = (msg: ChatMessage): ProposedMedication | undefined =>
     medicationDrafts[msg.id] ?? msg.response?.proposedMedication;
+
+  const getScheduledTestDraft = (msg: ChatMessage): ProposedScheduledTest | undefined =>
+    scheduledTestDrafts[msg.id] ?? msg.response?.proposedScheduledTest;
 
   const getMedicationListDraft = (msg: ChatMessage): PendingChatMedication[] => {
     if (medicationListDrafts[msg.id]) return medicationListDrafts[msg.id];
@@ -182,6 +191,27 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
     setConfirmedIds((prev) => new Set(prev).add(msg.id));
   };
 
+  const handleSaveScheduledTest = (msg: ChatMessage) => {
+    const draft = getScheduledTestDraft(msg);
+    if (!draft || !draft.date_iso) return;
+    const recordId = `sched-${Date.now()}`;
+    const record: DocumentRecord = {
+      id: recordId,
+      person_id: currentPerson.id,
+      doc_type: draft.test_kind,
+      title: draft.test_name,
+      date: draft.date_iso,
+      month_year: monthYearFromDate(draft.date_iso),
+      subtitle: draft.notes || 'Scheduled — no report yet',
+      unverified_count: 0,
+      facts: [],
+      condition_tags: ['General'],
+      status: 'scheduled',
+    };
+    onConfirmScheduleTest(record);
+    setConfirmedIds((prev) => new Set(prev).add(msg.id));
+  };
+
   const toggleMedTime = (msg: ChatMessage, t: TimeOfDay) => {
     const draft = getMedicationDraft(msg);
     if (!draft) return;
@@ -213,6 +243,20 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
       status: 'active',
       notes: draft.notes,
     });
+    setConfirmedIds((prev) => new Set(prev).add(msg.id));
+  };
+
+  const handleSaveNote = (msg: ChatMessage, proposedNote: { note_text: string; target_doctor?: string; target_condition?: string }) => {
+    const note: PendingNote = {
+      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      person_id: currentPerson.id,
+      note_text: proposedNote.note_text,
+      target_doctor: proposedNote.target_doctor,
+      target_condition: proposedNote.target_condition,
+      created_at: new Date().toISOString().split('T')[0],
+      resolved: false,
+    };
+    onConfirmAddNote(note);
     setConfirmedIds((prev) => new Set(prev).add(msg.id));
   };
 
@@ -336,18 +380,57 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
     }
 
     if (response.type === 'qa_answer') {
-      const trend = response.trend_fact_name ? findFactTrend(trends, response.trend_fact_name) : undefined;
+      // A real trend (2+ verified readings, computed from the actual fact store)
+      // is more informative than a plain citation, so anything the model cited
+      // that happens to also be chartable gets upgraded to a chart — not just
+      // whatever it explicitly flagged as trend_fact_name, since a slightly
+      // different name from the model ("HbA1c Level" vs "HbA1c") shouldn't be
+      // the reason a real trend fails to render.
+      const matchedTrends = new Map<string, FactTrend>();
+      if (response.trend_fact_name) {
+        const t = findFactTrend(trends, response.trend_fact_name);
+        if (t) matchedTrends.set(t.key, t);
+      }
+      (response.factCitations || []).forEach((cite) => {
+        const t = findFactTrend(trends, cite.fact_name);
+        if (t) matchedTrends.set(t.key, t);
+      });
+      const trendList = Array.from(matchedTrends.values());
+      const plainCitations = (response.factCitations || []).filter((c) => !findFactTrend(trends, c.fact_name));
 
-      // A real trend (2+ verified readings, computed from the actual fact
-      // store) is more trustworthy than whatever citations the model picked,
-      // so it takes priority when available.
-      if (trend) {
+      if (trendList.length > 0) {
         return (
-          <div className="ml-7 space-y-1.5">
-            <p className="text-[9.5px] uppercase tracking-wider text-ink-400 font-medium">{trend.name}</p>
-            <div className="bg-white border border-paper-300 rounded-xl p-2.5 shadow-2xs">
-              <TrendDisplay trend={trend} variant="full" />
-            </div>
+          <div className="ml-7 space-y-2.5">
+            {trendList.map((trend) => (
+              <div key={trend.key} className="space-y-1.5">
+                <p className="text-[9.5px] uppercase tracking-wider text-ink-400 font-medium">{trend.name}</p>
+                <div className="bg-white border border-paper-300 rounded-xl p-2.5 shadow-2xs">
+                  <TrendDisplay trend={trend} variant="full" />
+                </div>
+              </div>
+            ))}
+            {plainCitations.length > 0 && (
+              <div className="space-y-1.5">
+                {plainCitations.map((cite, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-white border border-paper-300 rounded-xl p-2.5 flex items-center justify-between shadow-2xs"
+                  >
+                    <div>
+                      <p className="text-[11px] font-medium text-ink-800">
+                        {cite.fact_name}: {cite.value}
+                      </p>
+                      <p className="text-[9.5px] text-ink-400">
+                        {cite.title} · {cite.date}
+                      </p>
+                    </div>
+                    <div className="w-4 h-4 rounded-full bg-sage-light text-sage flex items-center justify-center flex-shrink-0">
+                      <IconCheck size={11} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       }
@@ -400,7 +483,7 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setConfirmedIds((prev) => new Set(prev).add(msg.id))}
+              onClick={() => handleSaveNote(msg, response.proposedNote!)}
               className="flex-1 py-2 bg-terracotta-light text-terracotta font-medium rounded-xl text-center"
             >
               Attach to Brief
@@ -654,6 +737,76 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
               className="flex-1 py-2.5 bg-terracotta-light text-terracotta font-medium rounded-xl hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
             >
               Update medicine
+            </button>
+            <button
+              onClick={() => setDismissedIds((prev) => new Set(prev).add(msg.id))}
+              className="px-4 py-2.5 border border-paper-500 text-ink-400 hover:text-ink-700 rounded-xl transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (response.type === 'schedule_test_draft') {
+      const draft = getScheduledTestDraft(msg);
+      if (!draft) return null;
+      if (isConfirmed) {
+        return (
+          <p className="ml-7 text-[10.5px] text-sage flex items-center gap-1">
+            <IconCheck size={12} /> Added as a reminder in Records
+          </p>
+        );
+      }
+      return (
+        <div className="ml-7 space-y-3">
+          <div className="bg-white border border-paper-400 rounded-xl p-3 space-y-2.5 shadow-2xs">
+            <div>
+              <label className="block text-[9px] uppercase tracking-wider text-ink-400 mb-1">Test name</label>
+              <input
+                type="text"
+                value={draft.test_name}
+                onChange={(e) => setScheduledTestDrafts((prev) => ({ ...prev, [msg.id]: { ...draft, test_name: e.target.value } }))}
+                className="w-full px-2 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs text-ink-800 focus:outline-none focus:border-terracotta"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-ink-400 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={draft.date_iso || ''}
+                  onChange={(e) => setScheduledTestDrafts((prev) => ({ ...prev, [msg.id]: { ...draft, date_iso: e.target.value } }))}
+                  className="w-full px-2 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs text-ink-800 focus:outline-none focus:border-terracotta"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-ink-400 mb-1">Type</label>
+                <select
+                  value={draft.test_kind}
+                  onChange={(e) =>
+                    setScheduledTestDrafts((prev) => ({ ...prev, [msg.id]: { ...draft, test_kind: e.target.value as 'lab' | 'imaging' } }))
+                  }
+                  className="w-full px-2 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs text-ink-800 focus:outline-none"
+                >
+                  <option value="lab">Lab test</option>
+                  <option value="imaging">Imaging</option>
+                </select>
+              </div>
+            </div>
+            {!draft.date_iso && (
+              <p className="text-[10px] text-terracotta">Pick a date before adding this reminder.</p>
+            )}
+            {draft.notes && <p className="text-[10.5px] text-ink-500 italic">{draft.notes}</p>}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleSaveScheduledTest(msg)}
+              disabled={!draft.date_iso}
+              className="flex-1 py-2.5 bg-terracotta-light text-terracotta font-medium rounded-xl hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
+            >
+              Add reminder
             </button>
             <button
               onClick={() => setDismissedIds((prev) => new Set(prev).add(msg.id))}

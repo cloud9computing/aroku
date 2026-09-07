@@ -6,6 +6,12 @@ export default {
   ],
   theme: {
     extend: {
+      spacing: {
+        // Not in Tailwind's default scale — several screens use px-4.5 for the
+        // main horizontal gutter, which was silently generating no CSS at all
+        // (zero padding) until this token existed to back it.
+        '4.5': '1.125rem',
+      },
       colors: {
         paper: {
           50: '#FBFAF6',

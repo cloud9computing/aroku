@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DocumentRecord, Medication } from '../../types';
 import { extractFactsFromImageOrText } from '../../services/gemini';
 import { findExistingActiveMedication, sameMoleculeAndStrength } from '../../utils/duplicateMedication';
+import { sanitizeMedicineCandidate } from '../../utils/sanitizeMedicine';
 import { MedicationConfirmModal, PendingMedication } from '../medicines/MedicationConfirmModal';
 import { IconLoader, IconSearch, IconX } from '@tabler/icons-react';
 
@@ -45,7 +46,8 @@ export const BulkMedicineCheckModal: React.FC<BulkMedicineCheckModalProps> = ({
       setProgress({ current: i + 1, total: scannableRecords.length });
       try {
         const extracted = await extractFactsFromImageOrText(familyId, { recordId: scannableRecords[i].id });
-        for (const m of extracted.medications) {
+        for (const raw of extracted.medications) {
+          const m = sanitizeMedicineCandidate(raw);
           const isDuplicate =
             Boolean(findExistingActiveMedication(medications, m)) ||
             found.some((f) => sameMoleculeAndStrength(f.extracted, m));

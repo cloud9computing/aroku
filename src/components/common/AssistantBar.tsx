@@ -1,12 +1,20 @@
 import React, { useState, useRef } from 'react';
-import { IconArrowUp, IconCamera } from '@tabler/icons-react';
+import { IconArrowUp, IconCamera, IconPill } from '@tabler/icons-react';
 
 interface AssistantBarProps {
+  captureContext?: 'records' | 'medicines';
+  placeholder?: string;
   onOpenCapture: () => void;
   onSubmitQuery: (query: string) => void;
 }
 
-export const AssistantBar: React.FC<AssistantBarProps> = ({ onOpenCapture, onSubmitQuery }) => {
+export const AssistantBar: React.FC<AssistantBarProps> = ({
+  captureContext = 'records',
+  placeholder = 'Ask, or tell me something new…',
+  onOpenCapture,
+  onSubmitQuery,
+}) => {
+  const isMedContext = captureContext === 'medicines';
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -39,10 +47,10 @@ export const AssistantBar: React.FC<AssistantBarProps> = ({ onOpenCapture, onSub
           type="button"
           onClick={onOpenCapture}
           className="w-7 h-7 rounded-full bg-terracotta-light flex items-center justify-center text-terracotta hover:opacity-90 active:scale-90 transition-all flex-shrink-0"
-          title="Scan or capture medical document"
-          aria-label="Capture document"
+          title={isMedContext ? 'Capture a prescription' : 'Scan or capture medical document'}
+          aria-label={isMedContext ? 'Capture prescription' : 'Capture document'}
         >
-          <IconCamera size={15} />
+          {isMedContext ? <IconPill size={15} /> : <IconCamera size={15} />}
         </button>
 
         {/* Input */}
@@ -53,7 +61,7 @@ export const AssistantBar: React.FC<AssistantBarProps> = ({ onOpenCapture, onSub
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={handleFocus}
-          placeholder="Ask, or tell me something new…"
+          placeholder={placeholder}
           className="flex-1 bg-transparent text-[11.5px] text-ink-800 placeholder:text-ink-300 focus:outline-none px-1 py-0.5"
         />
 

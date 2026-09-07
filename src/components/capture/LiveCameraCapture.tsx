@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { IconCamera, IconFileUpload, IconRefresh, IconSwitchHorizontal, IconX } from '@tabler/icons-react';
+import { IconCamera, IconCheck, IconFileUpload, IconSwitchHorizontal, IconX } from '@tabler/icons-react';
 
 interface LiveCameraCaptureProps {
-  onCapture: (base64Image: string) => void;
+  onCapture: (base64Images: string[]) => void;
   onCancel: () => void;
 }
 
@@ -17,6 +17,10 @@ export const LiveCameraCapture: React.FC<LiveCameraCaptureProps> = ({ onCapture,
   const [isStreaming, setIsStreaming] = useState(false);
   const [flashSupported, setFlashSupported] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
+  // Multi-page documents are the common case (lab reports, discharge summaries),
+  // so a shot doesn't end the session — it queues a page and the camera stays
+  // live until the caregiver taps "Use N pages".
+  const [pages, setPages] = useState<string[]>([]);
 
   const startCamera = useCallback(async (facing: 'environment' | 'user') => {
     if (streamRef.current) {
@@ -131,21 +135,31 @@ export const LiveCameraCapture: React.FC<LiveCameraCaptureProps> = ({ onCapture,
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     const base64 = dataUrl.split(',')[1];
 
+    // Camera stays live — taking a photo queues a page rather than ending the session.
+    setPages((prev) => [...prev, base64]);
+  };
+
+  const removePage = (idx: number) => {
+    setPages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const finishCapture = () => {
+    if (pages.length === 0) return;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
     }
-
-    onCapture(base64);
+    onCapture(pages);
   };
 
   const handleNativeCameraFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const base64 = (ev.target?.result as string).split(',')[1];
-      onCapture(base64);
+      setPages((prev) => [...prev, base64]);
     };
     reader.readAsDataURL(file);
   };
@@ -162,7 +176,7 @@ export const LiveCameraCapture: React.FC<LiveCameraCaptureProps> = ({ onCapture,
         </button>
 
         <span className="text-white text-xs font-medium tracking-wide uppercase">
-          Align Document in Frame
+          {pages.length > 0 ? `Page ${pages.length + 1} · Align in Frame` : 'Align Document in Frame'}
         </span>
 
         {flashSupported ? (
@@ -193,8 +207,17 @@ export const LiveCameraCapture: React.FC<LiveCameraCaptureProps> = ({ onCapture,
                 onClick={() => fallbackInputRef.current?.click()}
                 className="w-full py-2.5 px-4 bg-terracotta text-white text-xs font-medium rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
               >
-                <IconCamera size={16} /> Open Native Camera
+                <IconCamera size={16} /> {pages.length > 0 ? 'Add another page' : 'Open Native Camera'}
               </button>
+
+              {pages.length > 0 && (
+                <button
+                  onClick={finishCapture}
+                  className="w-full py-2.5 px-4 bg-sage text-white text-xs font-medium rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <IconCheck size={16} /> Use {pages.length} {pages.length === 1 ? 'page' : 'pages'}
+                </button>
+              )}
 
               <button
                 onClick={onCancel}
@@ -241,36 +264,70 @@ export const LiveCameraCapture: React.FC<LiveCameraCaptureProps> = ({ onCapture,
 
       {/* Bottom Controls */}
       {!cameraError && (
-        <div className="w-full flex items-center justify-around px-8 pb-[max(env(safe-area-inset-bottom,0px),24px)] pt-4 z-10 bg-gradient-to-t from-black/80 to-transparent">
-          {/* Native photo picker fallback */}
-          <button
-            onClick={() => fallbackInputRef.current?.click()}
-            className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-md active:scale-95 transition-all"
-            title="Upload from gallery or take native photo"
-          >
-            <IconFileUpload size={20} />
-          </button>
-
-          {/* Shutter Button */}
-          <button
-            onClick={takePhoto}
-            disabled={!isStreaming}
-            className="w-18 h-18 rounded-full border-4 border-white p-1 flex items-center justify-center active:scale-90 transition-transform shadow-lg disabled:opacity-50"
-            aria-label="Capture photo"
-          >
-            <div className="w-full h-full bg-white rounded-full flex items-center justify-center">
-              <IconCamera size={26} className="text-ink-900" />
+        <div className="w-full z-10 bg-gradient-to-t from-black/80 to-transparent pt-4 pb-[max(env(safe-area-inset-bottom,0px),24px)]">
+          {pages.length > 0 && (
+            <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto no-scrollbar">
+              {pages.map((page, idx) => (
+                <div key={idx} className="relative flex-shrink-0">
+                  <img
+                    src={`data:image/jpeg;base64,${page}`}
+                    alt={`Page ${idx + 1}`}
+                    className="w-11 h-11 object-cover rounded-lg border-2 border-white/70"
+                  />
+                  <button
+                    onClick={() => removePage(idx)}
+                    className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-terracotta text-white flex items-center justify-center shadow-md"
+                    aria-label={`Remove page ${idx + 1}`}
+                  >
+                    <IconX size={10} />
+                  </button>
+                </div>
+              ))}
             </div>
-          </button>
+          )}
 
-          {/* Flip Camera Button */}
-          <button
-            onClick={toggleCamera}
-            className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-md active:scale-95 transition-all"
-            title="Flip camera"
-          >
-            <IconSwitchHorizontal size={22} />
-          </button>
+          {pages.length > 0 && (
+            <div className="px-5 pb-3">
+              <button
+                onClick={finishCapture}
+                className="w-full py-2.5 bg-sage text-white text-xs font-medium rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <IconCheck size={15} /> Use {pages.length} {pages.length === 1 ? 'page' : 'pages'}
+              </button>
+            </div>
+          )}
+
+          <div className="w-full flex items-center justify-around px-8">
+            {/* Native photo picker fallback */}
+            <button
+              onClick={() => fallbackInputRef.current?.click()}
+              className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-md active:scale-95 transition-all"
+              title="Upload from gallery or take native photo"
+            >
+              <IconFileUpload size={20} />
+            </button>
+
+            {/* Shutter Button */}
+            <button
+              onClick={takePhoto}
+              disabled={!isStreaming}
+              className="w-18 h-18 rounded-full border-4 border-white p-1 flex items-center justify-center active:scale-90 transition-transform shadow-lg disabled:opacity-50"
+              aria-label="Capture photo"
+            >
+              <div className="w-full h-full bg-white rounded-full flex items-center justify-center">
+                <IconCamera size={26} className="text-ink-900" />
+              </div>
+            </button>
+
+            {/* Flip Camera Button */}
+            <button
+              onClick={toggleCamera}
+              className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-md active:scale-95 transition-all"
+              title="Flip camera"
+            >
+              <IconSwitchHorizontal size={22} />
+            </button>
+          </div>
         </div>
       )}
     </div>

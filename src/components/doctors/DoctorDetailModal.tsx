@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { CareTeamMember } from '../../types';
+import { resolvePatientType } from '../../utils/careTeam';
+import { buildDirectionsUrl } from '../../utils/directions';
+import { DoctorFormFields, DoctorDraft } from './DoctorFormFields';
 import {
   IconMapPin,
   IconMicrophone,
@@ -18,6 +21,18 @@ interface DoctorDetailModalProps {
   onClose: () => void;
 }
 
+function toDraft(doctor: CareTeamMember): DoctorDraft {
+  return {
+    name: doctor.name,
+    specialty: doctor.specialty,
+    clinic: doctor.clinic || '',
+    phone: doctor.phone || '',
+    address: doctor.address || '',
+    notes: doctor.notes || '',
+    patient_type: resolvePatientType(doctor),
+  };
+}
+
 export const DoctorDetailModal: React.FC<DoctorDetailModalProps> = ({
   doctor,
   isOpen,
@@ -25,19 +40,33 @@ export const DoctorDetailModal: React.FC<DoctorDetailModalProps> = ({
   onDeleteDoctor,
   onClose,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState<CareTeamMember | null>(doctor);
+  // Opens straight into edit mode, pre-filled — tapping a card to view a
+  // doctor is almost always to fix or add a detail, so a separate "view then
+  // tap edit" step was just an extra click before getting there.
+  const [isEditing, setIsEditing] = useState(true);
+  const [draft, setDraft] = useState<DoctorDraft | null>(doctor ? toDraft(doctor) : null);
 
   useEffect(() => {
-    setDraft(doctor);
-    setIsEditing(false);
+    setDraft(doctor ? toDraft(doctor) : null);
+    setIsEditing(true);
   }, [doctor]);
 
   if (!isOpen || !doctor || !draft) return null;
 
   const handleSaveEdit = () => {
-    onUpdateDoctor(draft);
-    setIsEditing(false);
+    const name = draft.name.trim();
+    if (!name) return;
+    onUpdateDoctor({
+      ...doctor,
+      name,
+      specialty: draft.specialty.trim() || 'General Medicine',
+      clinic: draft.clinic.trim() || undefined,
+      phone: draft.phone.trim() || undefined,
+      address: draft.address.trim() || undefined,
+      notes: draft.notes.trim() || undefined,
+      patient_type: draft.patient_type,
+    });
+    onClose();
   };
 
   const handleDelete = () => {
@@ -63,7 +92,7 @@ export const DoctorDetailModal: React.FC<DoctorDetailModalProps> = ({
             <button
               onClick={() => setIsEditing((e) => !e)}
               className="text-ink-400 hover:text-ink-800 p-1"
-              title="Edit"
+              title={isEditing ? 'View' : 'Edit'}
             >
               <IconPencil size={16} />
             </button>
@@ -75,62 +104,18 @@ export const DoctorDetailModal: React.FC<DoctorDetailModalProps> = ({
 
         <div className="py-3 space-y-2.5 text-xs overflow-y-auto pr-0.5">
           {isEditing ? (
-            <div className="bg-white border border-paper-300 rounded-xl p-3 space-y-2">
-              <input
-                type="text"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="Doctor name"
-                className="w-full px-2.5 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs"
-              />
-              <input
-                type="text"
-                value={draft.specialty}
-                onChange={(e) => setDraft({ ...draft, specialty: e.target.value })}
-                placeholder="Specialty"
-                className="w-full px-2.5 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs"
-              />
-              <input
-                type="text"
-                value={draft.clinic || ''}
-                onChange={(e) => setDraft({ ...draft, clinic: e.target.value })}
-                placeholder="Hospital / Clinic"
-                className="w-full px-2.5 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs"
-              />
-              <input
-                type="tel"
-                value={draft.phone || ''}
-                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                placeholder="Phone"
-                className="w-full px-2.5 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs"
-              />
-              <input
-                type="text"
-                value={draft.address || ''}
-                onChange={(e) => setDraft({ ...draft, address: e.target.value })}
-                placeholder="Address"
-                className="w-full px-2.5 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs"
-              />
-              <input
-                type="text"
-                value={draft.notes || ''}
-                onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-                placeholder="Note"
-                className="w-full px-2.5 py-1.5 bg-paper-50 border border-paper-300 rounded-lg text-xs"
-              />
+            <div className="space-y-3">
+              <DoctorFormFields value={draft} onChange={setDraft} />
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={handleSaveEdit}
-                  className="flex-1 py-1.5 bg-terracotta text-white rounded-lg text-xs font-medium"
+                  className="flex-1 py-2.5 bg-terracotta text-white rounded-xl text-xs font-medium hover:bg-terracotta-dark active:scale-98 transition-all"
                 >
                   Save
                 </button>
                 <button
-                  onClick={() => {
-                    setDraft(doctor);
-                    setIsEditing(false);
-                  }}
-                  className="px-3 py-1.5 bg-paper-300 text-ink-600 rounded-lg text-xs"
+                  onClick={onClose}
+                  className="py-2.5 px-4 bg-paper-300 text-ink-600 rounded-xl text-xs font-medium hover:bg-paper-400 transition-colors"
                 >
                   Cancel
                 </button>
@@ -168,7 +153,7 @@ export const DoctorDetailModal: React.FC<DoctorDetailModalProps> = ({
               )}
               {doctor.address && (
                 <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(doctor.address)}`}
+                  href={buildDirectionsUrl(doctor.address)}
                   target="_blank"
                   rel="noreferrer"
                   className="py-2.5 bg-lavender-light text-lavender rounded-xl font-medium flex items-center justify-center gap-1.5"

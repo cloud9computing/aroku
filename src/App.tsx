@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { Person, DocumentRecord, Medication, Visit, CareTeamMember, AppNotification } from './types';
+import { Person, DocumentRecord, Medication, Visit, CareTeamMember, AppNotification, PendingNote } from './types';
 import { subscribeToAuthState, ensureUserProfile, syncFamilyClaim, UserProfile } from './firebase/auth';
 import { Family, subscribeToFamily } from './firebase/family';
 import {
@@ -25,7 +25,13 @@ import {
   deleteCareTeamMember,
   subscribeNotifications,
   markNotificationRead,
+  addNotification,
+  subscribePendingNotes,
+  addPendingNote,
+  resolvePendingNote,
 } from './firebase/firestoreService';
+import { computeDueNotifications } from './utils/upcomingNotifications';
+import { getAssistantPlaceholder } from './utils/assistantHints';
 import { SignInScreen } from './components/auth/SignInScreen';
 import { FamilyOnboarding } from './components/auth/FamilyOnboarding';
 import { Header } from './components/common/Header';
@@ -61,6 +67,7 @@ export const App: React.FC = () => {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [careTeam, setCareTeam] = useState<CareTeamMember[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [pendingNotes, setPendingNotes] = useState<PendingNote[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('records');
 
   const { isKeyboardVisible } = useVirtualKeyboard();
@@ -142,6 +149,7 @@ export const App: React.FC = () => {
       setMedications([]);
       setVisits([]);
       setNotifications([]);
+      setPendingNotes([]);
       return;
     }
     const unsubs = [
@@ -149,9 +157,21 @@ export const App: React.FC = () => {
       subscribeMedications(family.id, currentPersonId, setMedications),
       subscribeVisits(family.id, currentPersonId, setVisits),
       subscribeNotifications(family.id, currentPersonId, setNotifications),
+      subscribePendingNotes(family.id, currentPersonId, setPendingNotes),
     ];
     return () => unsubs.forEach((u) => u());
   }, [family?.id, currentPersonId]);
+
+  // Heads-up notifications for upcoming visits/tests — computed live from
+  // data already loaded above, no server-side scheduler involved. Each
+  // threshold has a deterministic id, so this only ever writes the ones
+  // missing from what's already synced, and converges once they exist.
+  useEffect(() => {
+    if (!family || !currentPersonId) return;
+    const existingIds = new Set(notifications.map((n) => n.id));
+    const due = computeDueNotifications(currentPersonId, visits, records, existingIds);
+    due.forEach((n) => addNotification(family.id, n));
+  }, [family?.id, currentPersonId, visits, records, notifications]);
 
   if (authUser === undefined || (authUser && !userProfile)) {
     return <LoadingScreen error={loadError} />;
@@ -198,6 +218,8 @@ export const App: React.FC = () => {
   const handleUpdateDoctor = (updatedDoc: CareTeamMember) => updateCareTeamMember(family.id, updatedDoc);
   const handleDeleteDoctor = (docId: string) => deleteCareTeamMember(family.id, docId);
   const handleMarkNotificationRead = (id: string) => markNotificationRead(family.id, id);
+  const handleAddPendingNote = (note: PendingNote) => addPendingNote(family.id, note);
+  const handleResolvePendingNote = (noteId: string) => resolvePendingNote(family.id, noteId);
 
   const handleSubmitAssistantQuery = async (query: string) => {
     if (!currentPerson) return;
@@ -261,15 +283,18 @@ export const App: React.FC = () => {
           onOpenHousehold={() => setIsHouseholdOpen(true)}
         />
 
-        <main className="flex-1 flex flex-col overflow-hidden overscroll-contain">
+        <main className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-contain">
           {activeTab === 'records' && (
             <RecordsTab
               familyId={family.id}
+              person={currentPerson}
               personName={currentPerson.name}
+              personSpecies={currentPerson.species}
               records={records}
               doctors={careTeam}
               medications={medications}
               onVerifyFact={handleVerifyFact}
+              onAddRecord={handleAddRecord}
               onUpdateRecord={handleUpdateRecord}
               onDeleteRecord={handleDeleteRecord}
               onAddMedication={handleAddMedication}
@@ -292,14 +317,20 @@ export const App: React.FC = () => {
               visits={visits}
               medications={medications}
               records={records}
+              careTeam={careTeam}
+              pendingNotes={pendingNotes}
               onUpdateVisit={handleUpdateVisit}
               onDeleteVisit={handleDeleteVisit}
+              onResolvePendingNote={handleResolvePendingNote}
+              onAddRecord={handleAddRecord}
+              onAddDoctor={handleAddDoctor}
             />
           )}
 
           {activeTab === 'doctors' && (
             <DoctorsTab
               doctors={careTeam}
+              personSpecies={currentPerson.species}
               onAddDoctor={handleAddDoctor}
               onUpdateDoctor={handleUpdateDoctor}
               onDeleteDoctor={handleDeleteDoctor}
@@ -309,6 +340,8 @@ export const App: React.FC = () => {
 
         <div className="flex-shrink-0 bg-paper-50">
           <AssistantBar
+            captureContext={activeTab === 'medicines' ? 'medicines' : 'records'}
+            placeholder={getAssistantPlaceholder(activeTab, currentPerson.species)}
             onOpenCapture={() => setIsCaptureOpen(true)}
             onSubmitQuery={handleSubmitAssistantQuery}
           />
@@ -339,7 +372,8 @@ export const App: React.FC = () => {
           isOpen={isNotificationsOpen}
           notifications={notifications}
           onMarkRead={handleMarkNotificationRead}
-          onNavigateToVerify={() => setActiveTab('records')}
+          onNavigateToRecords={() => setActiveTab('records')}
+          onNavigateToVisits={() => setActiveTab('visits')}
           onClose={() => setIsNotificationsOpen(false)}
         />
 
@@ -349,9 +383,8 @@ export const App: React.FC = () => {
           isOpen={isCaptureOpen}
           familyId={family.id}
           person={currentPerson}
-          medications={medications}
+          context={activeTab === 'medicines' ? 'medicines' : 'records'}
           onAddRecord={handleAddRecord}
-          onAddMedication={handleAddMedication}
           onClose={() => setIsCaptureOpen(false)}
         />
 
@@ -366,6 +399,8 @@ export const App: React.FC = () => {
           onConfirmAddVisit={handleAddVisit}
           onConfirmAddMedication={handleAddMedication}
           onConfirmUpdateMedication={handleUpdateMedication}
+          onConfirmAddNote={handleAddPendingNote}
+          onConfirmScheduleTest={handleAddRecord}
           onClose={handleCloseAssistantDrawer}
         />
       </div>

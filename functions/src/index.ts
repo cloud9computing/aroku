@@ -71,28 +71,32 @@ export const extractFacts = onCall(
   { secrets: [GEMINI_API_KEY], cors: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { familyId, text, mimeType, recordId } = request.data as {
+    const { familyId, text, mimeType, recordId, base64Image, base64Images: multiPage } = request.data as {
       familyId: string;
       text?: string;
       base64Image?: string;
+      base64Images?: string[];
       mimeType?: string;
       recordId?: string;
     };
-    let base64Image = (request.data as { base64Image?: string }).base64Image;
+    let base64Images = multiPage && multiPage.length > 0 ? multiPage : base64Image ? [base64Image] : undefined;
     await assertFamilyMember(request.auth.uid, familyId);
 
     // Re-checking an already-saved scan: pull it straight from Storage via
     // Admin SDK instead of asking the browser to fetch it — a plain client-side
     // fetch() of a Storage download URL hits real CORS restrictions, while
-    // server-to-server access here has none.
+    // server-to-server access here has none. A multi-page scan saves one file
+    // per page (original-1.jpg, original-2.jpg, ...), so every page is re-fetched,
+    // not just the first.
     let effectiveMimeType = mimeType;
-    if (!base64Image && recordId) {
+    if ((!base64Images || base64Images.length === 0) && recordId) {
       const bucket = getStorage().bucket();
       const [files] = await bucket.getFiles({ prefix: `families/${familyId}/records/${recordId}/` });
       if (files.length === 0) throw new HttpsError('not-found', 'No saved scan found for this record.');
-      const [buffer] = await files[0].download();
-      base64Image = buffer.toString('base64');
-      effectiveMimeType = files[0].metadata.contentType || 'image/jpeg';
+      const sorted = files.sort((a, b) => a.name.localeCompare(b.name));
+      const downloaded = await Promise.all(sorted.map((f) => f.download()));
+      base64Images = downloaded.map(([buffer]) => buffer.toString('base64'));
+      effectiveMimeType = sorted[0].metadata.contentType || 'image/jpeg';
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -100,6 +104,11 @@ export const extractFacts = onCall(
     const prompt = `You are an expert clinical medical record extraction engine for a caregiver health application.
 Today's date is ${today}.
 Carefully analyze this photographed or scanned medical document (lab report, prescription pad, imaging scan, or discharge summary).
+${
+  base64Images && base64Images.length > 1
+    ? `This document spans ${base64Images.length} photographed pages, attached in order — treat them as one single document, not as separate reports, and merge facts that continue across pages.`
+    : ''
+}
 Extract all typed clinical facts, tests, medications, diagnoses, and measurements.
 
 Rules:
@@ -160,7 +169,9 @@ Return ONLY valid JSON matching this exact structure:
 }`;
 
     const parts: unknown[] = [{ text: prompt }];
-    if (base64Image) parts.push({ inlineData: { data: base64Image, mimeType: effectiveMimeType || 'image/jpeg' } });
+    for (const img of base64Images || []) {
+      parts.push({ inlineData: { data: img, mimeType: effectiveMimeType || 'image/jpeg' } });
+    }
     if (text) parts.push({ text: `Context/OCR text:\n${text}` });
 
     const rawJson = await callGemini(GEMINI_API_KEY.value(), parts);
@@ -172,31 +183,111 @@ export const extractConsultationFacts = onCall(
   { secrets: [GEMINI_API_KEY], cors: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const { familyId, transcript, doctorName, specialty } = request.data as {
+    const { familyId, base64Audio, mimeType, doctorName, specialty } = request.data as {
       familyId: string;
-      transcript: string;
+      base64Audio: string;
+      mimeType?: string;
       doctorName: string;
       specialty: string;
     };
     await assertFamilyMember(request.auth.uid, familyId);
 
-    const prompt = `You are a clinical assistant summarizing a consultation recording for a family caregiver.
+    // The family may see specialists who don't speak the same language they do —
+    // detecting the spoken language and translating it is the whole point of
+    // sending Gemini the raw audio directly, rather than a browser-transcribed
+    // (English-only) text string.
+    const prompt = `You are a clinical assistant summarizing an audio recording of a medical consultation for a
+family caregiver. The recording may be in any language, not necessarily English.
 Doctor: ${doctorName} (${specialty})
-Transcript of consultation:
-"${transcript}"
 
-Extract:
-1. A concise 2-sentence summary of what happened and doctor reasoning ("what_happened").
-2. Key clinical decisions/medication changes made ("decisions").
-3. Specific instructions/advice given to the family ("answers_captured").
+From the attached audio, extract:
+1. "detected_language": the language the consultation was conducted in (e.g. "English", "Hindi", "Telugu").
+2. "full_transcript": a full transcript of the audio in its original spoken language.
+3. "translated_transcript": an English translation of the full conversation. If the recording was already in
+   English, set this to null (full_transcript already covers it).
+4. "what_happened": a concise 2-sentence summary in English of what happened and the doctor's reasoning.
+5. "decisions": key clinical decisions or medication changes made, in English.
+6. "answers_captured": specific instructions or advice given to the family, in English.
 
-If the transcript is too short or unclear to summarize responsibly, say so plainly in "what_happened" and return empty arrays — do not invent details.
+If the audio is too unclear, silent, or too short to summarize responsibly, say so plainly in "what_happened"
+and return empty arrays — do not invent details.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON matching this exact structure:
 {
+  "detected_language": "Language name",
+  "full_transcript": "Transcript in the original language",
+  "translated_transcript": "English translation, or null if the recording was already in English",
   "what_happened": "summary string",
   "decisions": ["decision 1", "decision 2"],
   "answers_captured": ["instruction 1", "instruction 2"]
+}`;
+
+    const parts: unknown[] = [
+      { text: prompt },
+      { inlineData: { data: base64Audio, mimeType: mimeType || 'audio/mp4' } },
+    ];
+
+    const rawJson = await callGemini(GEMINI_API_KEY.value(), parts);
+    return JSON.parse(rawJson);
+  }
+);
+
+export const generateVisitQuestions = onCall(
+  { secrets: [GEMINI_API_KEY], cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const { familyId, patientContext, doctorName, specialty, reason } = request.data as {
+      familyId: string;
+      patientContext: string;
+      doctorName: string;
+      specialty: string;
+      reason?: string;
+    };
+    await assertFamilyMember(request.auth.uid, familyId);
+
+    const prompt = `You are helping a family caregiver prepare for an upcoming medical visit, in an app whose whole
+purpose is to carry information between specialists who don't talk to each other. The caregiver sees multiple
+doctors for the same patient, and each doctor typically only sees their own slice of the picture.
+
+Patient context (verified facts, active medications with prescriber, care team, and visit history):
+
+${patientContext}
+
+Upcoming visit: ${doctorName} (${specialty})${reason ? `, reason: ${reason}` : ''}
+
+Draft 3-5 pre-visit questions the caregiver should ask ${doctorName}.
+
+THE CENTERPIECE INSTRUCTION: prioritize questions that connect something a DIFFERENT specialist/doctor did,
+prescribed, or found — a medication another doctor started or changed, a finding from another doctor's
+report, a plan from a different specialty — to this upcoming visit. For example: "Dr. Iyer (Vascular) started
+clopidogrel 75mg on 12 Jun — does that need to pause before today's anti-VEGF injection?" A generic
+single-specialty follow-up question ("How is the condition progressing?") is much less valuable here and
+should only fill remaining slots after cross-specialist questions are exhausted.
+
+Hard rules:
+1. Every question must cite the specific fact, medication, or record it is grounded in, in "fact_citations",
+   so the caregiver can verify it against their own records — never cite something not present in the
+   patient context above.
+2. Every question must be phrased as a question to ask the doctor — never as a clinical claim, a diagnosis,
+   or a judgment about what is or isn't a concern. "Ask whether X" or "Does X need Y" — never "X is a
+   problem" or "X should be stopped."
+3. Never invent a detail (a dose, a date, a doctor, a finding) that is not explicitly present in the patient
+   context above. If there is not enough cross-specialist history in the context to responsibly ground a good
+   cross-specialist question, it is fine and expected to fall back to fewer questions, or to more generic
+   single-specialty ones — do not fabricate detail just to hit 5 questions or to force a cross-specialist
+   angle that isn't actually supported by the data.
+4. "rationale" is one line explaining why this question matters, referencing the source (e.g. which other
+   doctor or record it connects to).
+
+Return ONLY valid JSON matching this exact structure:
+{
+  "questions": [
+    {
+      "text": "The question to ask, phrased as a question",
+      "rationale": "One line explaining why this question, referencing the source",
+      "fact_citations": ["Fact name: value (Document title, date)", "Medication name strength (prescribed by Dr X, date)"]
+    }
+  ]
 }`;
 
     const rawJson = await callGemini(GEMINI_API_KEY.value(), [{ text: prompt }]);
@@ -238,8 +329,10 @@ Determine the user intent and provide the exact response:
 1. If the user wants to schedule an appointment / visit (e.g. "Appointment with Dr Nair next Thursday around 4:30"):
    Set "type": "visit_draft", match the doctor against the care team, resolve relative dates to YYYY-MM-DD, and provide proposedVisit object.
 2. If the user asks a clinical fact query (e.g. "what was his creatinine in March?", "who prescribed clopidogrel?"):
-   Set "type": "qa_answer". Answer ONLY from facts present in the fact store above, with factCitations. If the fact store has no relevant information, say so plainly instead of guessing.
-   If the question is about how a specific measurable parameter has changed over time (e.g. "what's his HbA1c trend", "how has creatinine been"), also set "trend_fact_name" to that parameter's name exactly as it appears in the fact store above, so the app can render the real recorded history — otherwise leave it unset.
+   Set "type": "qa_answer". Answer ONLY from facts present in the fact store above, with factCitations — and cite the exact
+   parameter name as it appears in the fact store (e.g. "HbA1c", not "HbA1c Level" or "Hemoglobin A1c") so the app can
+   match it back to its recorded history.
+   If the question is about how a specific measurable parameter has changed over time (e.g. "what's his HbA1c trend", "how has creatinine been"), also set "trend_fact_name" to that exact parameter name, exactly as it appears in the fact store — the app itself checks whether there's enough recorded history to actually chart it, so just name the parameter and don't worry about double-checking that yourself; otherwise leave "trend_fact_name" unset.
 3. If the user asks to save a note / reminder for a doctor:
    Set "type": "note_draft" with proposedNote.
 4. If the user says they are starting, taking, or were prescribed exactly ONE medicine that is NOT already in the Active
@@ -256,11 +349,17 @@ Determine the user intent and provide the exact response:
    Active Medications (use the name as listed there), "current_strength" to its currently listed strength if you can
    tell which one they mean, and only the "new_*" fields that the caregiver actually asked to change (leave the others
    unset) — never invent a value for something they didn't mention changing.
-7. Otherwise set "type": "general".
+7. If the user wants to schedule/book a not-yet-done test, scan, or lab work as a future reminder (e.g. "schedule an
+   HbA1c test for next Monday", "I need to get a chest X-ray done on the 15th", "remind me to get a lipid panel done"):
+   Set "type": "schedule_test_draft" with proposedScheduledTest. Resolve relative dates to YYYY-MM-DD using today's
+   date above. Set "test_kind" to "imaging" only for scans/X-rays/ultrasounds/MRIs/CT — everything else (blood work,
+   panels, cultures, urine tests) is "lab". Never invent a date the user didn't state or clearly imply — if no date
+   was given at all, leave "date_iso" unset so the app can ask.
+8. Otherwise set "type": "general".
 
 Return ONLY valid JSON matching this schema:
 {
-  "type": "visit_draft" | "qa_answer" | "note_draft" | "medication_draft" | "medication_list_draft" | "medication_update_draft" | "general",
+  "type": "visit_draft" | "qa_answer" | "note_draft" | "medication_draft" | "medication_list_draft" | "medication_update_draft" | "schedule_test_draft" | "general",
   "message": "Direct, empathetic response text",
   "proposedVisit": {
     "doctor_name": "Doctor name",
@@ -297,9 +396,15 @@ Return ONLY valid JSON matching this schema:
     "new_time_of_day": ["morning"] or null,
     "new_food_relation": "before_food" | "after_food" | "with_food" | "either" | null
   },
-  "trend_fact_name": "Parameter name from the fact store, or null",
+  "proposedScheduledTest": {
+    "test_name": "e.g. HbA1c, Chest X-ray, Lipid Panel",
+    "test_kind": "lab" | "imaging",
+    "date_iso": "YYYY-MM-DD, or null if no date was stated",
+    "notes": "Any other detail the user mentioned (e.g. fasting required, ordered by Dr X), or null"
+  },
+  "trend_fact_name": "Parameter name exactly as it appears in the fact store (see rule 2), or null",
   "factCitations": [
-    { "title": "Document Title", "fact_name": "Parameter Name", "value": "Value", "date": "Date" }
+    { "title": "Document Title", "fact_name": "Parameter name exactly as it appears in the fact store", "value": "Value", "date": "Date" }
   ]
 }`;
 

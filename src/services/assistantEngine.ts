@@ -1,5 +1,6 @@
 import { Person, DocumentRecord, Medication, Visit, CareTeamMember, TimeOfDay, FoodRelation } from '../types';
 import { queryGeminiAssistant, ChatHistoryEntry } from './gemini';
+import { buildPatientContext } from '../utils/patientContext';
 
 export interface ProposedVisit {
   doctor_name: string;
@@ -37,14 +38,30 @@ export interface ProposedMedicationUpdate {
   new_food_relation?: FoodRelation;
 }
 
+export interface ProposedScheduledTest {
+  test_name: string;
+  test_kind: 'lab' | 'imaging';
+  date_iso?: string;
+  notes?: string;
+}
+
 export interface AssistantResponse {
-  type: 'visit_draft' | 'qa_answer' | 'note_draft' | 'medication_draft' | 'medication_list_draft' | 'medication_update_draft' | 'general';
+  type:
+    | 'visit_draft'
+    | 'qa_answer'
+    | 'note_draft'
+    | 'medication_draft'
+    | 'medication_list_draft'
+    | 'medication_update_draft'
+    | 'schedule_test_draft'
+    | 'general';
   message: string;
   proposedVisit?: ProposedVisit;
   proposedNote?: ProposedNote;
   proposedMedication?: ProposedMedication;
   proposedMedications?: ProposedMedication[];
   medicationUpdate?: ProposedMedicationUpdate;
+  proposedScheduledTest?: ProposedScheduledTest;
   trend_fact_name?: string;
   factCitations?: Array<{ title: string; fact_name: string; value: string; date: string }>;
 }
@@ -66,31 +83,7 @@ export async function processAssistantQuery(
   careTeam: CareTeamMember[],
   history: ChatHistoryEntry[] = []
 ): Promise<AssistantResponse> {
-  const patientContext = `
-Patient: ${person.name} (${person.species}, Age ${person.age || 'N/A'})
-Active Conditions: ${person.active_conditions.join(', ')}
-
-Care Team:
-${careTeam.map((c) => `- ${c.name} (${c.specialty}, Clinic: ${c.clinic || 'N/A'})`).join('\n')}
-
-Active Medications:
-${meds
-  .filter((m) => m.status === 'active')
-  .map((m) => `- ${m.molecule} ${m.strength} (Time: ${m.time_of_day.join('/')}, ${m.food_relation}) prescribed by ${m.prescriber_name} on ${m.prescribed_date}`)
-  .join('\n')}
-
-Recent Documents & Verified Facts:
-${records
-  .map(
-    (r) =>
-      `Record: ${r.title} (${r.date}, ${r.doctor_name || r.facility}):\n` +
-      r.facts.map((f) => `  * ${f.name}: ${f.value} ${f.unit || ''} (Provenance: "${f.provenance_snippet}")`).join('\n')
-  )
-  .join('\n\n')}
-
-Upcoming & Past Visits:
-${visits.map((v) => `- ${v.doctor_name} (${v.specialty}) on ${v.date_display} at ${v.time}`).join('\n')}
-  `;
+  const patientContext = buildPatientContext(person, records, meds, visits, careTeam);
 
   try {
     return await queryGeminiAssistant(familyId, input, patientContext, history);
@@ -146,6 +139,41 @@ export function parseAssistantInputLocal(input: string, careTeam: CareTeamMember
         food_relation,
         start_date_iso: startDate.toISOString().split('T')[0],
       },
+    };
+  }
+
+  const isTestSchedulingIntent =
+    (lower.includes('schedule') || lower.includes('book') || lower.includes('remind me') || lower.includes('need to get')) &&
+    (lower.includes('test') ||
+      lower.includes('scan') ||
+      lower.includes('lab work') ||
+      lower.includes('x-ray') ||
+      lower.includes('xray') ||
+      lower.includes('panel') ||
+      lower.includes('mri') ||
+      lower.includes('ultrasound'));
+
+  if (isTestSchedulingIntent) {
+    const test_kind: 'lab' | 'imaging' = /(x-ray|xray|scan|mri|ultrasound)/i.test(lower) ? 'imaging' : 'lab';
+
+    let testName = trimmed
+      .replace(/^(schedule|book|remind me to (get|book|schedule)|need to get)\s+/i, '')
+      .replace(/^(a|an|the)\s+/i, '')
+      .split(/\bfor\b|\bon\b/i)[0]
+      .trim();
+    if (!testName) testName = 'Test';
+
+    let dateIso: string | undefined;
+    if (lower.includes('tomorrow')) {
+      const tom = new Date();
+      tom.setDate(tom.getDate() + 1);
+      dateIso = tom.toISOString().split('T')[0];
+    }
+
+    return {
+      type: 'schedule_test_draft',
+      message: "I'm offline right now, so I've drafted this from what you typed — check the details before saving.",
+      proposedScheduledTest: { test_name: testName, test_kind, date_iso: dateIso },
     };
   }
 
