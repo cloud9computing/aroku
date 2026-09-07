@@ -107,7 +107,7 @@ export const MedicinesTab: React.FC<MedicinesTabProps> = ({
   ];
 
   return (
-    <div className="flex flex-col flex-1 pb-4">
+    <div className="flex flex-col flex-1 min-h-0 pb-4">
       {/* Subheader Context Text & Toggle */}
       <div className="px-4.5 pt-3 pb-2 flex items-center justify-between select-none">
         <span className="text-[10px] text-ink-200 font-medium">
@@ -142,7 +142,7 @@ export const MedicinesTab: React.FC<MedicinesTabProps> = ({
       </div>
 
       {/* Content */}
-      <div className="px-4.5 flex-1 overflow-y-auto space-y-4">
+      <div className="px-4.5 flex-1 min-h-0 overflow-y-auto space-y-4">
         {viewMode === 'today' ? (
           <>
             {/* Course ended — needs review */}

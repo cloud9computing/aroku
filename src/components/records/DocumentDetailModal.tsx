@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { CareTeamMember, ClinicalFact, DocumentRecord, Medication } from '../../types';
+import { CareTeamMember, ClinicalFact, DocumentRecord, Medication, Species } from '../../types';
 import { extractFactsFromImageOrText } from '../../services/gemini';
 import { findExistingActiveMedication } from '../../utils/duplicateMedication';
-import { MedicationConfirmModal, PendingMedication } from '../medicines/MedicationConfirmModal';
+import { normalizeDoctorName } from '../../utils/doctorName';
+import { medicineDisplayName } from '../../utils/medicineName';
+import { sanitizeMedicineCandidate } from '../../utils/sanitizeMedicine';
+import { monthYearFromDate } from '../../utils/recordDate';
+import { patientTypeForSpecies } from '../../utils/careTeam';
 import { AddDoctorModal } from '../doctors/AddDoctorModal';
 import {
   IconCheck,
   IconFileText,
+  IconFileTypePdf,
   IconLoader,
   IconPencil,
   IconPill,
@@ -15,11 +20,18 @@ import {
   IconX,
 } from '@tabler/icons-react';
 
+// Firebase Storage download URLs end in "?alt=media&token=..." so a plain
+// endsWith('.pdf') never matches — this was rendering PDFs through the <img>
+// tag and showing a broken image icon.
+function isPdfUrl(url: string): boolean {
+  return /\.pdf(\?|$)/i.test(url);
+}
+
 interface DocumentDetailModalProps {
   record: DocumentRecord | null;
   isOpen: boolean;
   familyId: string;
-  personName: string;
+  personSpecies: Species;
   doctors: CareTeamMember[];
   medications: Medication[];
   onVerifyFact: (recordId: string, factId: string, verified: boolean) => void;
@@ -34,7 +46,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
   record,
   isOpen,
   familyId,
-  personName,
+  personSpecies,
   doctors,
   medications,
   onVerifyFact,
@@ -55,67 +67,59 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
   const [editingFactNameId, setEditingFactNameId] = useState<string | null>(null);
   const [factNameDraft, setFactNameDraft] = useState('');
   const [isCheckingMeds, setIsCheckingMeds] = useState(false);
-  const [checkMedsMessage, setCheckMedsMessage] = useState<string | null>(null);
-  const [pendingMeds, setPendingMeds] = useState<PendingMedication[] | null>(null);
-  const [prescriberInfo, setPrescriberInfo] = useState<{ name?: string; specialty?: string }>({});
+  const [checkMedsError, setCheckMedsError] = useState<string | null>(null);
 
   if (!isOpen || !record) return null;
 
+  // Re-sanitized on every render, not just on write — Gemini's JSON mode only
+  // guarantees valid syntax, not the shape the prompt asked for, so a record
+  // saved before this normalization existed can still hold a malformed
+  // candidate (e.g. a null time_of_day) that would otherwise crash this view
+  // every time it's opened. This heals it in place without touching the data.
+  const pendingMedications = (record.pending_medications || []).map(sanitizeMedicineCandidate);
+  const scanPages = record.image_urls && record.image_urls.length > 0 ? record.image_urls : record.image_url ? [record.image_url] : [];
+
+  // Legacy backfill only — records created after this shipped already carry
+  // pending_medications from the same extraction pass that finds the facts.
   const handleCheckForMedicines = async () => {
     if (!record.image_url) return;
-    setCheckMedsMessage(null);
+    setCheckMedsError(null);
     setIsCheckingMeds(true);
     try {
       const extracted = await extractFactsFromImageOrText(familyId, { recordId: record.id });
-      if (extracted.medications.length === 0) {
-        setCheckMedsMessage('No medicines detected in this scan.');
-      } else {
-        setPrescriberInfo({ name: record.doctor_name || extracted.doctor_name, specialty: record.specialty || extracted.specialty });
-        setPendingMeds(
-          extracted.medications.map((m) => {
-            const isDuplicate = Boolean(findExistingActiveMedication(medications, m));
-            return { extracted: m, include: !isDuplicate, isDuplicate };
-          })
-        );
-      }
+      onUpdateRecord({ ...record, pending_medications: extracted.medications.map(sanitizeMedicineCandidate) });
     } catch (err) {
       console.error(err);
       const detail = err instanceof Error ? err.message : String(err);
-      setCheckMedsMessage(`Could not check this scan: ${detail}`);
+      setCheckMedsError(`Could not check this scan: ${detail}`);
     } finally {
       setIsCheckingMeds(false);
     }
   };
 
-  const toggleMedInclude = (idx: number) => {
-    if (!pendingMeds) return;
-    setPendingMeds(pendingMeds.map((m, i) => (i === idx ? { ...m, include: !m.include } : m)));
+  const handleAddPendingMedication = (idx: number) => {
+    const candidate = pendingMedications[idx];
+    if (!candidate) return;
+    onAddMedication({
+      id: `med-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      person_id: record.person_id,
+      molecule: candidate.molecule,
+      brand_name: candidate.brand_name,
+      strength: candidate.strength,
+      time_of_day: candidate.time_of_day.length > 0 ? candidate.time_of_day : ['morning'],
+      food_relation: candidate.food_relation,
+      prescriber_name: record.doctor_name || 'Self-reported',
+      prescriber_specialty: record.specialty || 'Not specified',
+      prescribed_date: candidate.start_date,
+      end_date: candidate.end_date,
+      status: 'active',
+      notes: candidate.notes,
+    });
+    onUpdateRecord({
+      ...record,
+      pending_medications: pendingMedications.filter((_, i) => i !== idx),
+    });
   };
-
-  const handleConfirmMedications = () => {
-    if (!pendingMeds || !record) return;
-    for (const { extracted, include } of pendingMeds) {
-      if (!include) continue;
-      onAddMedication({
-        id: `med-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        person_id: record.person_id,
-        molecule: extracted.molecule,
-        brand_name: extracted.brand_name,
-        strength: extracted.strength,
-        time_of_day: extracted.time_of_day.length > 0 ? extracted.time_of_day : ['morning'],
-        food_relation: extracted.food_relation,
-        prescriber_name: prescriberInfo.name || 'Self-reported',
-        prescriber_specialty: prescriberInfo.specialty || 'Not specified',
-        prescribed_date: extracted.start_date,
-        end_date: extracted.end_date,
-        status: 'active',
-        notes: extracted.notes,
-      });
-    }
-    setPendingMeds(null);
-  };
-
-  const normalizeDoctorName = (name: string) => name.trim().toLowerCase().replace(/^dr\.?\s*/, '');
 
   const isDoctorAlreadySaved =
     !!record.doctor_name && doctors.some((d) => normalizeDoctorName(d.name) === normalizeDoctorName(record.doctor_name!));
@@ -140,11 +144,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
 
   const handleSaveDate = () => {
     if (dateDraft && dateDraft !== record.date) {
-      const month_year = new Date(dateDraft + 'T00:00:00').toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-      });
-      onUpdateRecord({ ...record, date: dateDraft, month_year });
+      onUpdateRecord({ ...record, date: dateDraft, month_year: monthYearFromDate(dateDraft) });
     }
     setIsEditingDate(false);
   };
@@ -240,10 +240,10 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
             ) : (
               <button
                 onClick={handleStartEditTitle}
-                className="flex items-center gap-1.5 mt-0.5 text-left group"
+                className="flex items-center gap-1.5 mt-0.5 text-left group w-full min-w-0"
                 title="Tap to rename"
               >
-                <h3 className="font-serif text-lg text-ink-800 leading-tight truncate">{record.title}</h3>
+                <h3 className="font-serif text-lg text-ink-800 leading-tight truncate min-w-0">{record.title}</h3>
                 <IconPencil size={13} className="text-ink-300 group-hover:text-ink-600 flex-shrink-0" />
               </button>
             )}
@@ -278,7 +278,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
               activeTab === 'facts' ? 'bg-white text-ink-800 shadow-xs' : 'text-ink-500'
             }`}
           >
-            Extracted Clinical Facts ({record.facts.length})
+            Extracted Info ({record.facts.length + pendingMedications.length})
           </button>
           <button
             onClick={() => setActiveTab('source')}
@@ -286,16 +286,74 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
               activeTab === 'source' ? 'bg-white text-ink-800 shadow-xs' : 'text-ink-500'
             }`}
           >
-            Source Provenance
+            Source
           </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
           {activeTab === 'facts' ? (
-            record.facts.length === 0 ? (
-              <p className="text-center py-6 text-xs text-ink-400">No extracted facts in this record.</p>
-            ) : (
+            <>
+              {pendingMedications.length > 0 && (
+                <div className="space-y-2 pb-1">
+                  <p className="text-[9px] uppercase tracking-wider text-lavender font-semibold px-0.5">
+                    Medicines found in this scan
+                  </p>
+                  {pendingMedications.map((candidate, idx) => {
+                    const isDuplicate = Boolean(findExistingActiveMedication(medications, candidate));
+                    const { primary, secondary } = medicineDisplayName(candidate);
+                    return (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-xl border bg-white border-paper-300 shadow-2xs flex items-start justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[11.5px] font-semibold text-ink-800 flex items-center gap-1.5 flex-wrap">
+                            {primary} {candidate.strength}
+                            {secondary && <span className="text-ink-400 font-normal italic">{secondary}</span>}
+                          </p>
+                          <p className="text-[10px] text-ink-400 mt-0.5">
+                            {candidate.time_of_day.join(', ')} · {candidate.food_relation.replace('_', ' ')} · from{' '}
+                            {candidate.start_date}
+                            {candidate.end_date ? ` to ${candidate.end_date}` : ''}
+                          </p>
+                        </div>
+
+                        {isDuplicate ? (
+                          <span className="text-[9.5px] text-ochre flex items-center gap-0.5 font-medium px-2 py-0.5 bg-ochre-light/60 rounded-md flex-shrink-0 whitespace-nowrap">
+                            Already added
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleAddPendingMedication(idx)}
+                            className="px-2.5 py-1 bg-sage text-white rounded-lg text-[10.5px] font-medium hover:bg-sage-dark active:scale-95 transition-all flex items-center gap-1 shadow-2xs flex-shrink-0"
+                          >
+                            <IconPill size={12} /> Add
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {record.pending_medications === undefined && record.image_url && (
+                <div className="pb-1">
+                  <button
+                    onClick={handleCheckForMedicines}
+                    disabled={isCheckingMeds}
+                    className="text-[10.5px] text-lavender hover:underline font-medium flex items-center gap-1 disabled:opacity-60"
+                  >
+                    {isCheckingMeds ? <IconLoader size={12} className="animate-spin" /> : <IconPill size={12} />}
+                    {isCheckingMeds ? 'Checking…' : 'Check this scan for medicines'}
+                  </button>
+                  {checkMedsError && <p className="text-[10px] text-terracotta mt-1">{checkMedsError}</p>}
+                </div>
+              )}
+
+              {record.facts.length === 0 ? (
+                <p className="text-center py-6 text-xs text-ink-400">No extracted facts in this record.</p>
+              ) : (
               record.facts.map((fact) => (
                 <div
                   key={fact.id}
@@ -405,7 +463,8 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
                   </div>
                 </div>
               ))
-            )
+            )}
+            </>
           ) : (
             <div className="bg-white border border-paper-300 rounded-xl p-3 space-y-2 text-xs">
               <div className="flex items-center gap-2 text-ink-700 font-medium pb-1.5 border-b border-paper-300">
@@ -420,25 +479,45 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
                 <strong>Document Type:</strong> {record.doc_type}
               </p>
 
-              {record.image_url ? (
-                record.image_url.endsWith('.pdf') ? (
-                  <a
-                    href={record.image_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block text-center py-2.5 bg-paper-400/60 rounded-lg text-terracotta font-medium text-[11px]"
-                  >
-                    Open scanned PDF
-                  </a>
-                ) : (
-                  <a href={record.image_url} target="_blank" rel="noreferrer">
-                    <img
-                      src={record.image_url}
-                      alt={record.title}
-                      className="w-full rounded-lg border border-paper-300"
-                    />
-                  </a>
-                )
+              {scanPages.length > 0 ? (
+                <div className="space-y-2">
+                  {scanPages.map((url, idx) =>
+                    isPdfUrl(url) ? (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-3 p-2.5 bg-paper-400/40 hover:bg-paper-400/70 rounded-xl border border-paper-300 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-terracotta-light text-terracotta flex items-center justify-center flex-shrink-0">
+                          <IconFileTypePdf size={22} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11.5px] font-medium text-ink-800 truncate">
+                            {record.title}{scanPages.length > 1 ? ` (page ${idx + 1})` : ''}
+                          </p>
+                          <p className="text-[10px] text-terracotta font-medium">Open scanned PDF</p>
+                        </div>
+                      </a>
+                    ) : (
+                      <div key={url}>
+                        {scanPages.length > 1 && (
+                          <p className="text-[9px] uppercase tracking-wider text-ink-400 font-semibold mb-1">
+                            Page {idx + 1} of {scanPages.length}
+                          </p>
+                        )}
+                        <a href={url} target="_blank" rel="noreferrer">
+                          <img
+                            src={url}
+                            alt={`${record.title}${scanPages.length > 1 ? ` — page ${idx + 1}` : ''}`}
+                            className="w-full rounded-lg border border-paper-300"
+                          />
+                        </a>
+                      </div>
+                    )
+                  )}
+                </div>
               ) : (
                 <p className="text-[10.5px] text-ink-400 italic py-2">
                   No scanned copy was saved with this record.
@@ -454,10 +533,6 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
           )}
         </div>
 
-        {checkMedsMessage && (
-          <p className="text-[10.5px] text-ink-400 text-center pb-1 flex-shrink-0">{checkMedsMessage}</p>
-        )}
-
         {/* Footer */}
         <div className="pt-2.5 border-t border-paper-300 flex justify-between items-center flex-shrink-0 gap-2">
           <button
@@ -469,38 +544,19 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
             <IconTrash size={16} />
           </button>
 
-          {record.image_url && (
-            <button
-              onClick={handleCheckForMedicines}
-              disabled={isCheckingMeds}
-              className="flex-1 px-3 py-1.5 bg-lavender-light text-lavender text-xs font-medium rounded-xl hover:opacity-90 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
-            >
-              {isCheckingMeds ? <IconLoader size={13} className="animate-spin" /> : <IconPill size={13} />}
-              {isCheckingMeds ? 'Checking…' : 'Check for medicines'}
-            </button>
-          )}
-
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-paper-300 hover:bg-paper-400 text-ink-700 text-xs font-medium rounded-xl transition-colors flex-shrink-0"
+            className="flex-1 px-4 py-1.5 bg-paper-300 hover:bg-paper-400 text-ink-700 text-xs font-medium rounded-xl transition-colors"
           >
             Close
           </button>
         </div>
       </div>
 
-      <MedicationConfirmModal
-        isOpen={Boolean(pendingMeds)}
-        personName={personName}
-        pendingMeds={pendingMeds || []}
-        onToggle={toggleMedInclude}
-        onConfirm={handleConfirmMedications}
-        onClose={() => setPendingMeds(null)}
-      />
-
       <AddDoctorModal
         isOpen={isAddDoctorOpen}
         initialValues={{ name: record.doctor_name, specialty: record.specialty, clinic: record.facility }}
+        defaultPatientType={patientTypeForSpecies(personSpecies)}
         onAddDoctor={(doctor) => {
           onAddDoctor(doctor);
           setIsAddDoctorOpen(false);

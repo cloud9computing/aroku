@@ -24,18 +24,24 @@ function extensionForMimeType(mimeType: string): string {
   return 'jpg';
 }
 
-export async function uploadRecordImage(
+// A multi-page camera scan (lab report, discharge summary) saves one file per
+// page — "original-1.jpg", "original-2.jpg", ... — instead of overwriting a
+// single "original" file, so every page survives and can be re-fetched later.
+export async function uploadRecordImages(
   familyId: string,
   recordId: string,
-  base64Data: string,
-  mimeType: string = 'image/jpeg'
-): Promise<string> {
-  const fileRef = ref(
-    storage,
-    `families/${familyId}/records/${recordId}/original.${extensionForMimeType(mimeType)}`
+  images: { base64Data: string; mimeType: string }[]
+): Promise<string[]> {
+  return Promise.all(
+    images.map(async ({ base64Data, mimeType }, idx) => {
+      const fileRef = ref(
+        storage,
+        `families/${familyId}/records/${recordId}/original-${idx + 1}.${extensionForMimeType(mimeType)}`
+      );
+      await uploadString(fileRef, base64Data, 'base64', { contentType: mimeType });
+      return getDownloadURL(fileRef);
+    })
   );
-  await uploadString(fileRef, base64Data, 'base64', { contentType: mimeType });
-  return getDownloadURL(fileRef);
 }
 
 export async function uploadConsultationAudio(

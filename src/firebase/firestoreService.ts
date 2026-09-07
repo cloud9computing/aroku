@@ -16,6 +16,7 @@ import {
   Visit,
   CareTeamMember,
   AppNotification,
+  PendingNote,
 } from '../types';
 import { deleteRecordFiles, deleteVisitFiles } from './storageService';
 
@@ -180,4 +181,30 @@ export function subscribeNotifications(
 
 export async function markNotificationRead(familyId: string, id: string): Promise<void> {
   await updateDoc(doc(familyCollection(familyId, 'notifications'), id), { read: true });
+}
+
+// Notification ids are deterministic (see computeDueNotifications) so this is
+// safe to call repeatedly — writing the same id again is a no-op in effect,
+// since the caller only ever calls this for ids it already confirmed don't exist.
+export async function addNotification(familyId: string, notification: AppNotification): Promise<void> {
+  await setDoc(doc(familyCollection(familyId, 'notifications'), notification.id), stripUndefinedDeep(notification));
+}
+
+// Pending notes — caregiver-drafted notes for a doctor, saved from the
+// assistant chat so they survive closing the drawer and can surface on a
+// matching upcoming visit's prep brief until marked addressed.
+export function subscribePendingNotes(
+  familyId: string,
+  personId: string,
+  callback: (notes: PendingNote[]) => void
+): () => void {
+  return subscribeCollection<PendingNote>(familyId, 'pending_notes', personId, callback);
+}
+
+export async function addPendingNote(familyId: string, note: PendingNote): Promise<void> {
+  await setDoc(doc(familyCollection(familyId, 'pending_notes'), note.id), stripUndefinedDeep(note));
+}
+
+export async function resolvePendingNote(familyId: string, noteId: string): Promise<void> {
+  await updateDoc(doc(familyCollection(familyId, 'pending_notes'), noteId), { resolved: true });
 }

@@ -1,25 +1,31 @@
 import React, { useState, useRef } from 'react';
-import { DocumentRecord, Medication, Person } from '../../types';
+import { DocumentRecord, Person } from '../../types';
 import { extractFactsFromImageOrText } from '../../services/gemini';
-import { uploadRecordImage } from '../../firebase/storageService';
-import { findExistingActiveMedication } from '../../utils/duplicateMedication';
+import { uploadRecordImages } from '../../firebase/storageService';
+import { sanitizeMedicineCandidate } from '../../utils/sanitizeMedicine';
+import { monthYearFromDate } from '../../utils/recordDate';
 import { LiveCameraCapture } from './LiveCameraCapture';
-import { MedicationConfirmModal, PendingMedication } from '../medicines/MedicationConfirmModal';
 import {
   IconAlertTriangle,
   IconCamera,
   IconFileUpload,
   IconLoader,
+  IconPill,
   IconX,
 } from '@tabler/icons-react';
+
+export type CaptureContext = 'records' | 'medicines';
 
 interface CaptureModalProps {
   isOpen: boolean;
   familyId: string;
   person: Person;
-  medications: Medication[];
+  context?: CaptureContext;
+  // When set, the scan fills in this scheduled placeholder (same id, status
+  // cleared) instead of creating a brand new record.
+  attachToRecord?: DocumentRecord | null;
   onAddRecord: (record: DocumentRecord) => void;
-  onAddMedication: (medication: Medication) => void;
+  onUpdateRecord?: (record: DocumentRecord) => void;
   onClose: () => void;
 }
 
@@ -27,62 +33,71 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
   isOpen,
   familyId,
   person,
-  medications,
+  context = 'records',
+  attachToRecord,
   onAddRecord,
-  onAddMedication,
+  onUpdateRecord,
   onClose,
 }) => {
   const [showCameraStream, setShowCameraStream] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [pendingMeds, setPendingMeds] = useState<PendingMedication[] | null>(null);
-  const [prescriberInfo, setPrescriberInfo] = useState<{ name?: string; specialty?: string }>({});
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
+  const isMedContext = context === 'medicines';
+
   const resetAndClose = () => {
-    setPendingMeds(null);
     setShowCameraStream(false);
+    setResultMessage(null);
     onClose();
   };
 
-  const processAndCreateRecord = async (base64: string, mimeType: string) => {
+  const processAndCreateRecord = async (images: string[], mimeType: string) => {
     setError(null);
+    setResultMessage(null);
     setIsProcessing(true);
-    setProcessingStep('Uploading the original document...');
+    setProcessingStep(images.length > 1 ? `Uploading ${images.length} pages...` : 'Uploading the original document...');
 
-    const recordId = `rec-${Date.now()}`;
+    const recordId = attachToRecord?.id ?? `rec-${Date.now()}`;
 
     try {
-      const imageUrl = await uploadRecordImage(familyId, recordId, base64, mimeType);
+      const imageUrls = await uploadRecordImages(
+        familyId,
+        recordId,
+        images.map((base64Data) => ({ base64Data, mimeType }))
+      );
 
       setProcessingStep('Extracting typed clinical values with Gemini AI...');
       let extracted;
       let extractionFailed = false;
       try {
-        extracted = await extractFactsFromImageOrText(familyId, { base64Image: base64, mimeType });
+        extracted = await extractFactsFromImageOrText(familyId, { base64Images: images, mimeType });
       } catch (err) {
         console.warn('AI extraction failed, saving the original document without extracted facts:', err);
         extractionFailed = true;
         extracted = {
-          doc_type: 'lab' as const,
-          title: 'Captured document — needs manual review',
-          date: new Date().toISOString().split('T')[0],
+          doc_type: attachToRecord?.doc_type ?? ('lab' as const),
+          title: attachToRecord?.title ?? 'Captured document — needs manual review',
+          date: attachToRecord?.date ?? new Date().toISOString().split('T')[0],
           condition_tags: ['General'],
           facts: [],
           medications: [],
         };
       }
 
+      const recordDate = extracted.date || new Date().toISOString().split('T')[0];
+
       const newRecord: DocumentRecord = {
         id: recordId,
         person_id: person.id,
         doc_type: extracted.doc_type,
         title: extracted.title,
-        date: extracted.date || new Date().toISOString().split('T')[0],
-        month_year: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        date: recordDate,
+        month_year: monthYearFromDate(recordDate),
         subtitle: extractionFailed
           ? 'AI extraction unavailable — original saved for manual review'
           : extracted.facts.length > 0
@@ -93,7 +108,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
         facility: extracted.facility,
         unverified_count: extracted.facts.length,
         condition_tags: extracted.condition_tags || ['General'],
-        image_url: imageUrl,
+        image_url: imageUrls[0],
+        image_urls: imageUrls.length > 1 ? imageUrls : undefined,
         facts: extracted.facts.map((f, idx) => ({
           id: `f-${Date.now()}-${idx}`,
           document_id: recordId,
@@ -101,26 +117,43 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
           name: f.name,
           value: f.value,
           unit: f.unit,
-          date: extracted.date || new Date().toISOString().split('T')[0],
+          date: recordDate,
           is_verified: false,
           confidence: f.confidence || 0.85,
           provenance_snippet: f.provenance_snippet || f.name,
           condition_tag: f.condition_tag || 'General',
           flag: f.flag || 'normal',
         })),
+        // Extracted in the same call as facts, but never auto-added — like facts, these
+        // sit as unconfirmed candidates on the record until someone taps "Add to medicines".
+        pending_medications: extractionFailed ? undefined : extracted.medications.map(sanitizeMedicineCandidate),
+        // Omitting `status` here (rather than 'completed') is deliberate: a full
+        // setDoc overwrite drops the old 'scheduled' field entirely once a report lands.
       };
 
-      onAddRecord(newRecord);
+      if (attachToRecord && onUpdateRecord) {
+        onUpdateRecord(newRecord);
+      } else {
+        onAddRecord(newRecord);
+      }
       setIsProcessing(false);
       setShowCameraStream(false);
 
       if (!extractionFailed && extracted.medications.length > 0) {
-        setPrescriberInfo({ name: extracted.doctor_name, specialty: extracted.specialty });
-        setPendingMeds(
-          extracted.medications.map((m) => {
-            const isDuplicate = Boolean(findExistingActiveMedication(medications, m));
-            return { extracted: m, include: !isDuplicate, isDuplicate };
-          })
+        if (isMedContext) {
+          setResultMessage(
+            `Found ${extracted.medications.length} ${extracted.medications.length === 1 ? 'medicine' : 'medicines'} in that scan — open it from Records to add ${extracted.medications.length === 1 ? 'it' : 'them'} to the list.`
+          );
+        } else {
+          resetAndClose();
+        }
+      } else if (isMedContext) {
+        // Medicines-tab capture promises medicines specifically — a silent close here
+        // would look like the scan did nothing, so say what actually happened.
+        setResultMessage(
+          extractionFailed
+            ? "Couldn't read this scan automatically — it was saved to Records so you can add the medicines by hand."
+            : 'No medicines were detected in that scan — it was saved to Records for review.'
         );
       } else {
         resetAndClose();
@@ -133,9 +166,9 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
     }
   };
 
-  const handleCameraPhotoTaken = (base64: string) => {
+  const handleCameraPhotosCaptured = (images: string[]) => {
     setShowCameraStream(false);
-    processAndCreateRecord(base64, 'image/jpeg');
+    processAndCreateRecord(images, 'image/jpeg');
   };
 
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,57 +178,16 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
     const reader = new FileReader();
     reader.onload = (ev) => {
       const base64 = (ev.target?.result as string).split(',')[1];
-      processAndCreateRecord(base64, file.type || 'application/pdf');
+      processAndCreateRecord([base64], file.type || 'application/pdf');
     };
     reader.readAsDataURL(file);
-  };
-
-  const toggleMedInclude = (idx: number) => {
-    if (!pendingMeds) return;
-    setPendingMeds(pendingMeds.map((m, i) => (i === idx ? { ...m, include: !m.include } : m)));
-  };
-
-  const handleConfirmMedications = () => {
-    if (!pendingMeds) return;
-    for (const { extracted, include } of pendingMeds) {
-      if (!include) continue;
-      onAddMedication({
-        id: `med-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        person_id: person.id,
-        molecule: extracted.molecule,
-        brand_name: extracted.brand_name,
-        strength: extracted.strength,
-        time_of_day: extracted.time_of_day.length > 0 ? extracted.time_of_day : ['morning'],
-        food_relation: extracted.food_relation,
-        prescriber_name: prescriberInfo.name || 'Self-reported',
-        prescriber_specialty: prescriberInfo.specialty || 'Not specified',
-        prescribed_date: extracted.start_date,
-        end_date: extracted.end_date,
-        status: 'active',
-        notes: extracted.notes,
-      });
-    }
-    resetAndClose();
   };
 
   if (showCameraStream) {
     return (
       <LiveCameraCapture
-        onCapture={handleCameraPhotoTaken}
+        onCapture={handleCameraPhotosCaptured}
         onCancel={() => setShowCameraStream(false)}
-      />
-    );
-  }
-
-  if (pendingMeds) {
-    return (
-      <MedicationConfirmModal
-        isOpen
-        personName={person.name}
-        pendingMeds={pendingMeds}
-        onToggle={toggleMedInclude}
-        onConfirm={handleConfirmMedications}
-        onClose={resetAndClose}
       />
     );
   }
@@ -210,11 +202,19 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
         <div className="flex items-center justify-between pb-2.5 border-b border-paper-300 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-terracotta-light text-terracotta flex items-center justify-center">
-              <IconCamera size={16} />
+              {isMedContext ? <IconPill size={16} /> : <IconCamera size={16} />}
             </div>
             <div>
-              <h3 className="font-serif text-lg text-ink-800 leading-tight">Capture Record</h3>
-              <p className="text-[10px] text-ink-400">Add to {person.name}&apos;s clinical timeline</p>
+              <h3 className="font-serif text-lg text-ink-800 leading-tight">
+                {attachToRecord ? 'Attach Report' : isMedContext ? 'Capture Prescription' : 'Capture Record'}
+              </h3>
+              <p className="text-[10px] text-ink-400">
+                {attachToRecord
+                  ? `Add the scan for "${attachToRecord.title}"`
+                  : isMedContext
+                  ? `We'll pull out the medicines and add them to ${person.name}'s list`
+                  : `Add to ${person.name}'s clinical timeline`}
+              </p>
             </div>
           </div>
           <button onClick={onClose} disabled={isProcessing} className="text-ink-400 hover:text-ink-800 p-1">
@@ -238,6 +238,13 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
               <div className="p-2.5 bg-terracotta-light/60 border border-terracotta/30 rounded-xl flex items-start gap-2">
                 <IconAlertTriangle size={14} className="text-terracotta flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-ink-700">{error}</p>
+              </div>
+            )}
+
+            {resultMessage && (
+              <div className="p-2.5 bg-lavender-light/60 border border-lavender/30 rounded-xl flex items-start gap-2">
+                <IconPill size={14} className="text-lavender flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-ink-700">{resultMessage}</p>
               </div>
             )}
 
@@ -268,9 +275,12 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
             />
 
             <p className="text-[10px] text-ink-400 leading-relaxed pt-1">
-              The original photo or PDF is always kept, even if automatic extraction doesn&apos;t find every value —
-              you can verify or add facts by hand from the Records tab. If it&apos;s a prescription, you&apos;ll be
-              asked to confirm any medicines found before they&apos;re added.
+              {isMedContext
+                ? "Scan or upload the prescription — any medicines found will be waiting on the saved record for you to add with one tap."
+                : "The original photo or PDF is always kept, even if automatic extraction doesn't find every value — " +
+                  "you can verify or add facts by hand from the Records tab. If it's a prescription, any medicines " +
+                  "found will be waiting there for you to add with one tap."}
+              {' '}Multi-page report? Use the camera — it keeps the shutter open so you can capture every page before saving.
             </p>
           </div>
         )}

@@ -37,10 +37,11 @@ export interface ExtractionResult {
 const extractFactsFn = httpsCallable(functions, 'extractFacts');
 const extractConsultationFactsFn = httpsCallable(functions, 'extractConsultationFacts');
 const queryAssistantFn = httpsCallable(functions, 'queryAssistant');
+const generateVisitQuestionsFn = httpsCallable(functions, 'generateVisitQuestions');
 
 export async function extractFactsFromImageOrText(
   familyId: string,
-  input: { text?: string; base64Image?: string; mimeType?: string; recordId?: string }
+  input: { text?: string; base64Image?: string; base64Images?: string[]; mimeType?: string; recordId?: string }
 ): Promise<ExtractionResult> {
   const { data } = await extractFactsFn({ familyId, ...input });
   const parsed = data as Partial<ExtractionResult>;
@@ -57,14 +58,32 @@ export async function extractFactsFromImageOrText(
   };
 }
 
-export async function extractConsultationFactsFromTranscript(
+export interface ConsultationAudioExtraction {
+  what_happened: string;
+  decisions: string[];
+  answers_captured: string[];
+  full_transcript?: string;
+  detected_language?: string;
+  translated_transcript?: string;
+}
+
+export async function extractConsultationFactsFromAudio(
   familyId: string,
-  transcript: string,
+  base64Audio: string,
+  mimeType: string,
   doctorName: string,
   specialty: string
-): Promise<{ what_happened: string; decisions: string[]; answers_captured: string[] }> {
-  const { data } = await extractConsultationFactsFn({ familyId, transcript, doctorName, specialty });
-  return data as { what_happened: string; decisions: string[]; answers_captured: string[] };
+): Promise<ConsultationAudioExtraction> {
+  const { data } = await extractConsultationFactsFn({ familyId, base64Audio, mimeType, doctorName, specialty });
+  const parsed = data as Partial<ConsultationAudioExtraction>;
+  return {
+    what_happened: parsed.what_happened || 'Recording processed, but no summary could be generated.',
+    decisions: Array.isArray(parsed.decisions) ? parsed.decisions : [],
+    answers_captured: Array.isArray(parsed.answers_captured) ? parsed.answers_captured : [],
+    full_transcript: parsed.full_transcript || undefined,
+    detected_language: parsed.detected_language || undefined,
+    translated_transcript: parsed.translated_transcript || undefined,
+  };
 }
 
 export interface ProposedMedicationPayload {
@@ -87,8 +106,23 @@ export interface ProposedMedicationUpdate {
   new_food_relation?: 'before_food' | 'after_food' | 'with_food' | 'either';
 }
 
+export interface ProposedScheduledTest {
+  test_name: string;
+  test_kind: 'lab' | 'imaging';
+  date_iso?: string;
+  notes?: string;
+}
+
 export interface AssistantQueryResult {
-  type: 'visit_draft' | 'qa_answer' | 'note_draft' | 'medication_draft' | 'medication_list_draft' | 'medication_update_draft' | 'general';
+  type:
+    | 'visit_draft'
+    | 'qa_answer'
+    | 'note_draft'
+    | 'medication_draft'
+    | 'medication_list_draft'
+    | 'medication_update_draft'
+    | 'schedule_test_draft'
+    | 'general';
   message: string;
   proposedVisit?: {
     doctor_name: string;
@@ -107,6 +141,7 @@ export interface AssistantQueryResult {
   proposedMedication?: ProposedMedicationPayload;
   medicationUpdate?: ProposedMedicationUpdate;
   proposedMedications?: ProposedMedicationPayload[];
+  proposedScheduledTest?: ProposedScheduledTest;
   trend_fact_name?: string;
   factCitations?: Array<{ title: string; fact_name: string; value: string; date: string }>;
 }
@@ -124,4 +159,22 @@ export async function queryGeminiAssistant(
 ): Promise<AssistantQueryResult> {
   const { data } = await queryAssistantFn({ familyId, userQuery, patientContext, history });
   return data as AssistantQueryResult;
+}
+
+export interface GeneratedVisitQuestion {
+  text: string;
+  rationale?: string;
+  fact_citations?: string[];
+}
+
+export async function generateVisitQuestions(
+  familyId: string,
+  patientContext: string,
+  doctorName: string,
+  specialty: string,
+  reason: string
+): Promise<{ questions: GeneratedVisitQuestion[] }> {
+  const { data } = await generateVisitQuestionsFn({ familyId, patientContext, doctorName, specialty, reason });
+  const parsed = data as { questions?: GeneratedVisitQuestion[] };
+  return { questions: Array.isArray(parsed.questions) ? parsed.questions : [] };
 }

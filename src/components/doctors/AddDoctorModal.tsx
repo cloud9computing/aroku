@@ -1,30 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { CareTeamMember } from '../../types';
+import { CareTeamMember, CareTeamPatientType } from '../../types';
 import { IconStethoscope, IconX } from '@tabler/icons-react';
+import { DoctorFormFields, DoctorDraft } from './DoctorFormFields';
 
 interface AddDoctorModalProps {
   isOpen: boolean;
   initialValues?: { name?: string; specialty?: string; clinic?: string };
+  defaultPatientType?: CareTeamPatientType;
   onAddDoctor: (doctor: CareTeamMember) => void;
   onClose: () => void;
 }
 
-export const AddDoctorModal: React.FC<AddDoctorModalProps> = ({ isOpen, initialValues, onAddDoctor, onClose }) => {
-  const [name, setName] = useState('');
-  const [specialty, setSpecialty] = useState('');
-  const [clinic, setClinic] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [notes, setNotes] = useState('');
+function emptyDraft(
+  defaultPatientType: CareTeamPatientType,
+  initialValues?: { name?: string; specialty?: string; clinic?: string }
+): DoctorDraft {
+  return {
+    name: initialValues?.name || '',
+    specialty: initialValues?.specialty || '',
+    clinic: initialValues?.clinic || '',
+    phone: '',
+    address: '',
+    notes: '',
+    patient_type: defaultPatientType,
+  };
+}
+
+export const AddDoctorModal: React.FC<AddDoctorModalProps> = ({
+  isOpen,
+  initialValues,
+  defaultPatientType = 'human',
+  onAddDoctor,
+  onClose,
+}) => {
+  const [draft, setDraft] = useState<DoctorDraft>(() => emptyDraft(defaultPatientType, initialValues));
 
   useEffect(() => {
     if (isOpen) {
-      setName(initialValues?.name || '');
-      setSpecialty(initialValues?.specialty || '');
-      setClinic(initialValues?.clinic || '');
-      setPhone('');
-      setAddress('');
-      setNotes('');
+      setDraft(emptyDraft(defaultPatientType, initialValues));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -33,25 +46,21 @@ export const AddDoctorModal: React.FC<AddDoctorModalProps> = ({ isOpen, initialV
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const name = draft.name.trim();
+    if (!name) return;
 
     onAddDoctor({
       id: `ct-${Date.now()}`,
-      name: name.trim().startsWith('Dr.') ? name.trim() : `Dr. ${name.trim()}`,
-      specialty: specialty.trim() || 'General Medicine',
-      clinic: clinic.trim() || undefined,
-      phone: phone.trim() || undefined,
-      address: address.trim() || undefined,
-      notes: notes.trim() || undefined,
+      name: name.startsWith('Dr.') ? name : `Dr. ${name}`,
+      specialty: draft.specialty.trim() || 'General Medicine',
+      clinic: draft.clinic.trim() || undefined,
+      phone: draft.phone.trim() || undefined,
+      address: draft.address.trim() || undefined,
+      notes: draft.notes.trim() || undefined,
       consent_state: 'not_asked',
+      patient_type: draft.patient_type,
     });
 
-    setName('');
-    setSpecialty('');
-    setClinic('');
-    setPhone('');
-    setAddress('');
-    setNotes('');
     onClose();
   };
 
@@ -73,74 +82,7 @@ export const AddDoctorModal: React.FC<AddDoctorModalProps> = ({ isOpen, initialV
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-3 space-y-3 text-xs text-ink-700 pr-0.5">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-ink-400 mb-1">Name</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. S. Nair"
-                className="w-full px-3 py-2 bg-white border border-paper-300 rounded-xl text-xs text-ink-800 focus:outline-none focus:border-terracotta"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-ink-400 mb-1">Specialty</label>
-              <input
-                type="text"
-                value={specialty}
-                onChange={(e) => setSpecialty(e.target.value)}
-                placeholder="e.g. Cardiology"
-                className="w-full px-3 py-2 bg-white border border-paper-300 rounded-xl text-xs text-ink-800 focus:outline-none focus:border-terracotta"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-wider text-ink-400 mb-1">Hospital / Clinic</label>
-            <input
-              type="text"
-              value={clinic}
-              onChange={(e) => setClinic(e.target.value)}
-              placeholder="e.g. Apollo Hospitals"
-              className="w-full px-3 py-2 bg-white border border-paper-300 rounded-xl text-xs text-ink-800 focus:outline-none focus:border-terracotta"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-ink-400 mb-1">Phone</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98765 43210"
-                className="w-full px-3 py-2 bg-white border border-paper-300 rounded-xl text-xs text-ink-800 focus:outline-none focus:border-terracotta"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-ink-400 mb-1">Address</label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Clinic address"
-                className="w-full px-3 py-2 bg-white border border-paper-300 rounded-xl text-xs text-ink-800 focus:outline-none focus:border-terracotta"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-wider text-ink-400 mb-1">Note (optional)</label>
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Recommended by Aunt Priya"
-              className="w-full px-3 py-2 bg-white border border-paper-300 rounded-xl text-xs text-ink-800 focus:outline-none focus:border-terracotta"
-            />
-          </div>
+          <DoctorFormFields value={draft} onChange={setDraft} nameRequired />
 
           <div className="pt-2 flex gap-2">
             <button
