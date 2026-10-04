@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AssistantResponse, ChatMessage, ProposedVisit, ProposedMedication, ProposedMedicationUpdate, ProposedScheduledTest } from '../../services/assistantEngine';
+import { AssistantResponse, ChatMessage, ProposedVisit, ProposedMedication, ProposedMedicationUpdate, ProposedScheduledTest, ProposedMedicationStop } from '../../services/assistantEngine';
 import { Person, Visit, Medication, DocumentRecord, TimeOfDay, FoodRelation, PendingNote } from '../../types';
 import {
   findExistingActiveMedication,
   findActiveMedicationsByMolecule,
+  findActiveMedicationsFuzzy,
   sameMoleculeAndStrength,
   normalize,
 } from '../../utils/duplicateMedication';
@@ -16,6 +17,7 @@ import {
   IconCheck,
   IconLoader,
   IconPencil,
+  IconPlayerStop,
   IconSparkles,
   IconX,
 } from '@tabler/icons-react';
@@ -69,6 +71,7 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
   const [medicationDrafts, setMedicationDrafts] = useState<Record<string, ProposedMedication>>({});
   const [medicationListDrafts, setMedicationListDrafts] = useState<Record<string, PendingChatMedication[]>>({});
   const [scheduledTestDrafts, setScheduledTestDrafts] = useState<Record<string, ProposedScheduledTest>>({});
+  const [medicationStopSelections, setMedicationStopSelections] = useState<Record<string, Set<string>>>({});
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [inputText, setInputText] = useState('');
@@ -158,6 +161,57 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
       time_of_day: update.new_time_of_day || existing.time_of_day,
       food_relation: update.new_food_relation || existing.food_relation,
     });
+    setConfirmedIds((prev) => new Set(prev).add(msg.id));
+  };
+
+  interface StopCandidate {
+    med: Medication;
+    action: 'stop' | 'reduce';
+    remainingTimes?: TimeOfDay[];
+  }
+
+  // Every active medicine that could plausibly be what the caregiver means,
+  // fuzzy-matched on molecule/brand name (never a single silent guess) — and,
+  // for a partial stop, only the ones that actually run at one of the named
+  // times. Each becomes its own checkable row the caregiver confirms by hand,
+  // so an ambiguous molecule name never turns into stopping the wrong entry.
+  const getMedicationStopCandidates = (stop: ProposedMedicationStop): StopCandidate[] => {
+    const matches = findActiveMedicationsFuzzy(medications, stop.molecule);
+    const candidates: StopCandidate[] = [];
+    for (const med of matches) {
+      if (stop.stop_times && stop.stop_times.length > 0) {
+        const affected = med.time_of_day.some((t) => stop.stop_times!.includes(t));
+        if (!affected) continue;
+        const remaining = med.time_of_day.filter((t) => !stop.stop_times!.includes(t));
+        candidates.push(remaining.length === 0 ? { med, action: 'stop' } : { med, action: 'reduce', remainingTimes: remaining });
+      } else {
+        candidates.push({ med, action: 'stop' });
+      }
+    }
+    return candidates;
+  };
+
+  const getStopSelection = (msgId: string, candidates: StopCandidate[]): Set<string> =>
+    medicationStopSelections[msgId] ?? new Set(candidates.map((c) => c.med.id));
+
+  const toggleStopSelection = (msg: ChatMessage, medId: string, candidates: StopCandidate[]) => {
+    const current = getStopSelection(msg.id, candidates);
+    const next = new Set(current);
+    if (next.has(medId)) next.delete(medId);
+    else next.add(medId);
+    setMedicationStopSelections((prev) => ({ ...prev, [msg.id]: next }));
+  };
+
+  const handleConfirmMedicationStop = (msg: ChatMessage, candidates: StopCandidate[], stopReason?: string) => {
+    const selected = getStopSelection(msg.id, candidates);
+    for (const c of candidates) {
+      if (!selected.has(c.med.id)) continue;
+      if (c.action === 'stop') {
+        onConfirmUpdateMedication({ ...c.med, status: 'stopped', stop_reason: stopReason || c.med.stop_reason });
+      } else {
+        onConfirmUpdateMedication({ ...c.med, time_of_day: c.remainingTimes! });
+      }
+    }
     setConfirmedIds((prev) => new Set(prev).add(msg.id));
   };
 
@@ -807,6 +861,80 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
               className="flex-1 py-2.5 bg-terracotta-light text-terracotta font-medium rounded-xl hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
             >
               Add reminder
+            </button>
+            <button
+              onClick={() => setDismissedIds((prev) => new Set(prev).add(msg.id))}
+              className="px-4 py-2.5 border border-paper-500 text-ink-400 hover:text-ink-700 rounded-xl transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (response.type === 'medication_stop_draft' && response.medicationStop) {
+      const stop = response.medicationStop;
+      if (isConfirmed) {
+        return (
+          <p className="ml-7 text-[10.5px] text-sage flex items-center gap-1">
+            <IconCheck size={12} /> Updated in medicines
+          </p>
+        );
+      }
+
+      const candidates = getMedicationStopCandidates(stop);
+      if (candidates.length === 0) {
+        return (
+          <p className="ml-7 text-[10.5px] text-terracotta">
+            Couldn&apos;t find an active &ldquo;{stop.molecule}&rdquo;{stop.stop_times ? ` running at ${stop.stop_times.join(', ')}` : ''} to
+            stop — check the spelling, or stop it directly from the Medicines tab.
+          </p>
+        );
+      }
+
+      const selected = getStopSelection(msg.id, candidates);
+
+      return (
+        <div className="ml-7 space-y-3">
+          <div className="bg-white border border-paper-400 rounded-xl p-3 space-y-2 shadow-2xs">
+            {candidates.length > 1 && (
+              <p className="text-[9.5px] uppercase tracking-wider text-ink-400 font-semibold">
+                Found {candidates.length} matches — confirm which to stop
+              </p>
+            )}
+            {candidates.map((c) => {
+              const { primary, secondary } = medicineDisplayName(c.med);
+              return (
+                <label key={c.med.id} className="flex items-start gap-2 cursor-pointer py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(c.med.id)}
+                    onChange={() => toggleStopSelection(msg, c.med.id, candidates)}
+                    className="mt-0.5 flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <p className="text-[11.5px] font-medium text-ink-800">
+                      {primary} {c.med.strength}
+                      {secondary && <span className="text-ink-400 font-normal"> ({secondary})</span>}
+                    </p>
+                    <p className="text-[10px] text-ink-400">Currently: {c.med.time_of_day.join(', ')}</p>
+                    <p className={`text-[10.5px] font-medium mt-0.5 ${c.action === 'stop' ? 'text-terracotta' : 'text-sage'}`}>
+                      {c.action === 'stop' ? 'Will be stopped entirely' : `Will continue at ${c.remainingTimes!.join(', ')} only`}
+                    </p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleConfirmMedicationStop(msg, candidates, stop.stop_reason)}
+              disabled={selected.size === 0}
+              className="flex-1 py-2.5 bg-terracotta-light text-terracotta font-medium rounded-xl hover:opacity-90 active:scale-98 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              <IconPlayerStop size={13} />
+              Confirm
             </button>
             <button
               onClick={() => setDismissedIds((prev) => new Set(prev).add(msg.id))}

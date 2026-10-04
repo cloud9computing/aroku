@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Person, Visit, Medication, DocumentRecord, CareTeamMember, PendingNote } from '../../types';
-import { IconAlertTriangle, IconTimeline, IconUser } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCalendarEvent, IconTimeline, IconUser } from '@tabler/icons-react';
 import { VisitDetailView } from './VisitDetailView';
 import { PastVisitRecapModal } from './PastVisitRecapModal';
+import { EmptyState } from '../common/EmptyState';
 import { isOverdue } from '../../utils/dueDates';
 
 interface VisitsTabProps {
@@ -18,6 +19,7 @@ interface VisitsTabProps {
   onResolvePendingNote: (noteId: string) => void;
   onAddRecord: (record: DocumentRecord) => void;
   onAddDoctor: (doctor: CareTeamMember) => void;
+  onOpenCapture: () => void;
 }
 
 export const VisitsTab: React.FC<VisitsTabProps> = ({
@@ -33,6 +35,7 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
   onResolvePendingNote,
   onAddRecord,
   onAddDoctor,
+  onOpenCapture,
 }) => {
   const [viewMode, setViewMode] = useState<'timeline' | 'by_doctor'>('timeline');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('All');
@@ -94,6 +97,7 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
   return (
     <div className="flex flex-col flex-1 min-h-0 pb-4">
       {/* Specialty Filter & View Mode Toggle */}
+      {visits.length > 0 && (
       <div className="px-4.5 pt-3 pb-2 flex items-center justify-between gap-2 select-none">
         {/* Specialty Filter Chips */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
@@ -139,8 +143,19 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* Main List */}
+      {visits.length === 0 ? (
+        <EmptyState
+          icon={<IconCalendarEvent size={24} />}
+          color="ochre"
+          title="No visits yet"
+          description="Tell Aroku about an upcoming appointment, or scan a consultation sheet that mentions a follow-up date."
+          ctaLabel="Capture an appointment"
+          onCta={onOpenCapture}
+        />
+      ) : (
       <div className="px-4.5 flex-1 min-h-0 overflow-y-auto pt-1">
         {viewMode === 'timeline' ? (
           <div className="relative pl-1">
@@ -266,6 +281,7 @@ export const VisitsTab: React.FC<VisitsTabProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Past Visit Modal */}
       <PastVisitRecapModal

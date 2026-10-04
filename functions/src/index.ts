@@ -133,6 +133,15 @@ Rules:
    (Enzymatic, Serum)"; "eGFR" not "Estimated Glomerular Filtration Rate (CKD-EPI)"; "Total Cholesterol" not
    "Cholesterol, Total, Serum"). Keep the report's exact original wording in "provenance_snippet" instead, never in
    "name". If it's a veterinary report, apply the same principle using the standard name a vet would use.
+7. This photo might sometimes be a doctor's business/visiting card or a clinic sign board instead of a clinical
+   report — if so, there may be little or no clinical data on it at all, which is fine: leave "facts" and
+   "medications" empty, and still fill in "doctor_name", "specialty", and "facility" from the card, plus "phone"
+   and "address" if visible on it.
+8. Separately, check whether the document mentions a follow-up or next appointment — a specific future date to
+   return, whether or not it names a doctor. If so, populate "follow_up_visit" with its date (YYYY-MM-DD, resolved
+   relative to this document's own date above if stated relatively, e.g. "review after 2 weeks"), "doctor_name"
+   (use this document's own doctor if the follow-up doesn't name a different one), "specialty", and "reason" if
+   stated. If no follow-up is mentioned anywhere, set "follow_up_visit" to null — never invent one.
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -141,6 +150,8 @@ Return ONLY valid JSON matching this exact structure:
   "doctor_name": "Doctor name or null",
   "specialty": "Medical specialty or null",
   "facility": "Hospital / Diagnostic center name or null",
+  "phone": "Phone number visible on a business/visiting card, or null",
+  "address": "Clinic/practice address visible on a business/visiting card, or null",
   "date": "YYYY-MM-DD",
   "condition_tags": ["Condition1", "Condition2"],
   "facts": [
@@ -165,7 +176,13 @@ Return ONLY valid JSON matching this exact structure:
       "end_date": "YYYY-MM-DD or null",
       "notes": "Any other stated detail (e.g. indication), or null"
     }
-  ]
+  ],
+  "follow_up_visit": {
+    "doctor_name": "Doctor name, or null if no follow-up was mentioned at all",
+    "specialty": "Specialty or null",
+    "date": "YYYY-MM-DD, or null if no follow-up was mentioned",
+    "reason": "Reason stated, or null"
+  }
 }`;
 
     const parts: unknown[] = [{ text: prompt }];
@@ -355,11 +372,21 @@ Determine the user intent and provide the exact response:
    date above. Set "test_kind" to "imaging" only for scans/X-rays/ultrasounds/MRIs/CT — everything else (blood work,
    panels, cultures, urine tests) is "lab". Never invent a date the user didn't state or clearly imply — if no date
    was given at all, leave "date_iso" unset so the app can ask.
-8. Otherwise set "type": "general".
+8. If the user wants to STOP a medicine already in the Active Medications list above — entirely, or just one or more of
+   its dose times while continuing the rest (e.g. "stop metformin", "discontinue clopidogrel", "stop the evening dose of
+   metformin, keep the morning one", "no longer needs the night dose of gabapentin"):
+   Set "type": "medication_stop_draft" with "medicationStop". Set "molecule" to match it against Active Medications
+   (use the name as listed there, even if the caregiver used a brand name or slightly different wording), and
+   "current_strength" to its currently listed strength if you can tell which one they mean (leave unset if unsure —
+   the app will show every plausible match for the caregiver to pick from, never guess silently). If the caregiver
+   named specific dose times to stop (e.g. "evening", "night"), set "stop_times" to exactly those — this is a PARTIAL
+   stop, the medicine keeps running at its other times. If they mean to stop it altogether, leave "stop_times" unset.
+   Only set "stop_reason" if the caregiver actually stated one (e.g. "stop aspirin, GI bleed risk") — never invent one.
+9. Otherwise set "type": "general".
 
 Return ONLY valid JSON matching this schema:
 {
-  "type": "visit_draft" | "qa_answer" | "note_draft" | "medication_draft" | "medication_list_draft" | "medication_update_draft" | "schedule_test_draft" | "general",
+  "type": "visit_draft" | "qa_answer" | "note_draft" | "medication_draft" | "medication_list_draft" | "medication_update_draft" | "schedule_test_draft" | "medication_stop_draft" | "general",
   "message": "Direct, empathetic response text",
   "proposedVisit": {
     "doctor_name": "Doctor name",
@@ -401,6 +428,12 @@ Return ONLY valid JSON matching this schema:
     "test_kind": "lab" | "imaging",
     "date_iso": "YYYY-MM-DD, or null if no date was stated",
     "notes": "Any other detail the user mentioned (e.g. fasting required, ordered by Dr X), or null"
+  },
+  "medicationStop": {
+    "molecule": "Name matching an entry in Active Medications",
+    "current_strength": "Its currently listed strength, or null if unclear which one",
+    "stop_times": ["evening"] or null,
+    "stop_reason": "Reason the caregiver stated, or null"
   },
   "trend_fact_name": "Parameter name exactly as it appears in the fact store (see rule 2), or null",
   "factCitations": [

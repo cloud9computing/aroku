@@ -307,6 +307,7 @@ export const App: React.FC = () => {
               medications={medications}
               onUpdateMedication={handleUpdateMedication}
               onDeleteMedication={handleDeleteMedication}
+              onOpenCapture={() => setIsCaptureOpen(true)}
             />
           )}
 
@@ -324,6 +325,7 @@ export const App: React.FC = () => {
               onResolvePendingNote={handleResolvePendingNote}
               onAddRecord={handleAddRecord}
               onAddDoctor={handleAddDoctor}
+              onOpenCapture={() => setIsCaptureOpen(true)}
             />
           )}
 
@@ -340,7 +342,7 @@ export const App: React.FC = () => {
 
         <div className="flex-shrink-0 bg-paper-50">
           <AssistantBar
-            captureContext={activeTab === 'medicines' ? 'medicines' : 'records'}
+            captureContext={activeTab}
             placeholder={getAssistantPlaceholder(activeTab, currentPerson.species)}
             onOpenCapture={() => setIsCaptureOpen(true)}
             onSubmitQuery={handleSubmitAssistantQuery}
@@ -383,8 +385,10 @@ export const App: React.FC = () => {
           isOpen={isCaptureOpen}
           familyId={family.id}
           person={currentPerson}
-          context={activeTab === 'medicines' ? 'medicines' : 'records'}
+          context={activeTab}
           onAddRecord={handleAddRecord}
+          onAddVisit={handleAddVisit}
+          onAddDoctor={handleAddDoctor}
           onClose={() => setIsCaptureOpen(false)}
         />
 

@@ -3,6 +3,7 @@ import { CareTeamMember, DocumentRecord, DocumentType, Medication, Person, Speci
 import {
   IconAlertTriangle,
   IconCalendarEvent,
+  IconCamera,
   IconCategory,
   IconCircleCheck,
   IconClock,
@@ -23,6 +24,7 @@ import { StandardizeNamesModal } from './StandardizeNamesModal';
 import { BulkMedicineCheckModal } from './BulkMedicineCheckModal';
 import { RescheduleTestModal } from './RescheduleTestModal';
 import { CaptureModal } from '../capture/CaptureModal';
+import { EmptyState } from '../common/EmptyState';
 import { computeFormatOnlyMerges, applyFormatOnlyMerges } from '../../utils/factNameClusters';
 import { safeMonthYearFromDate } from '../../utils/recordDate';
 import { daysUntil, formatDaysUntilLabel } from '../../utils/dueDates';
@@ -66,6 +68,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
   const [attachRecord, setAttachRecord] = useState<DocumentRecord | null>(null);
   const [rescheduleRecord, setRescheduleRecord] = useState<DocumentRecord | null>(null);
+  const [isNewCaptureOpen, setIsNewCaptureOpen] = useState(false);
 
   // Fact names that differ only by case/whitespace/trailing punctuation carry
   // no ambiguity, so they're merged silently the moment they're seen — no
@@ -268,6 +271,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({
   return (
     <div className="flex flex-col flex-1 min-h-0 pb-4">
       {/* Top Filter and View Toggle Controls */}
+      {records.length > 0 && (
       <div className="px-4.5 pt-3 pb-2 flex items-center justify-between gap-2 select-none">
         {/* Condition Filter Chips */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
@@ -351,8 +355,19 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Records List */}
+      {records.length === 0 ? (
+        <EmptyState
+          icon={<IconCamera size={24} />}
+          color="terracotta"
+          title="No records yet"
+          description="Scan a lab report, prescription, or discharge summary — Aroku reads out the values for you to review and verify."
+          ctaLabel="Capture a record"
+          onCta={() => setIsNewCaptureOpen(true)}
+        />
+      ) : (
       <div className="px-4.5 flex-1 min-h-0 overflow-y-auto space-y-4">
         {viewMode === 'timeline' ? (
           groupedByMonth.map(([month, recs]) => (
@@ -383,6 +398,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Fact Inspection & 1-Tap Verification Modal */}
       <DocumentDetailModal
@@ -444,7 +460,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({
       />
 
       <CaptureModal
-        isOpen={Boolean(attachRecord)}
+        isOpen={Boolean(attachRecord) || isNewCaptureOpen}
         familyId={familyId}
         person={person}
         attachToRecord={attachRecord}
@@ -453,7 +469,10 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({
           onUpdateRecord(updated);
           setAttachRecord(null);
         }}
-        onClose={() => setAttachRecord(null)}
+        onClose={() => {
+          setAttachRecord(null);
+          setIsNewCaptureOpen(false);
+        }}
       />
     </div>
   );

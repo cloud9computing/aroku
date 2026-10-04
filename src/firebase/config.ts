@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
@@ -20,6 +20,10 @@ export const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+// Yahoo isn't one of Firebase's zero-config providers (unlike Google) — it
+// only works once a Yahoo Developer app's Client ID/Secret are entered under
+// Authentication -> Sign-in method -> Yahoo in the Firebase console.
+export const yahooProvider = new OAuthProvider('yahoo.com');
 
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),

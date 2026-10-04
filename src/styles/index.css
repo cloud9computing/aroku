@@ -28,7 +28,8 @@ body {
 }
 
 .font-serif {
-  font-family: Georgia, Cambria, "Times New Roman", serif;
+  font-family: "Fraunces", Georgia, Cambria, "Times New Roman", serif;
+  font-optical-sizing: auto;
 }
 
 /* Safe Area Insets Helpers */

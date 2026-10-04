@@ -1,12 +1,20 @@
 import React, { useState, useRef } from 'react';
-import { IconArrowUp, IconCamera, IconPill } from '@tabler/icons-react';
+import { IconAddressBook, IconArrowUp, IconCalendarEvent, IconCamera, IconPill } from '@tabler/icons-react';
+import { CaptureContext } from '../capture/CaptureModal';
 
 interface AssistantBarProps {
-  captureContext?: 'records' | 'medicines';
+  captureContext?: CaptureContext;
   placeholder?: string;
   onOpenCapture: () => void;
   onSubmitQuery: (query: string) => void;
 }
+
+const CAPTURE_BUTTON: Record<CaptureContext, { icon: React.ReactNode; label: string }> = {
+  records: { icon: <IconCamera size={15} />, label: 'Scan or capture medical document' },
+  medicines: { icon: <IconPill size={15} />, label: 'Capture a prescription' },
+  visits: { icon: <IconCalendarEvent size={15} />, label: 'Capture an appointment — e.g. a follow-up printed on a consultation sheet' },
+  doctors: { icon: <IconAddressBook size={15} />, label: "Capture a doctor's visiting card or prescription pad header" },
+};
 
 export const AssistantBar: React.FC<AssistantBarProps> = ({
   captureContext = 'records',
@@ -14,7 +22,7 @@ export const AssistantBar: React.FC<AssistantBarProps> = ({
   onOpenCapture,
   onSubmitQuery,
 }) => {
-  const isMedContext = captureContext === 'medicines';
+  const { icon: captureIcon, label: captureLabel } = CAPTURE_BUTTON[captureContext];
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -47,10 +55,10 @@ export const AssistantBar: React.FC<AssistantBarProps> = ({
           type="button"
           onClick={onOpenCapture}
           className="w-7 h-7 rounded-full bg-terracotta-light flex items-center justify-center text-terracotta hover:opacity-90 active:scale-90 transition-all flex-shrink-0"
-          title={isMedContext ? 'Capture a prescription' : 'Scan or capture medical document'}
-          aria-label={isMedContext ? 'Capture prescription' : 'Capture document'}
+          title={captureLabel}
+          aria-label={captureLabel}
         >
-          {isMedContext ? <IconPill size={15} /> : <IconCamera size={15} />}
+          {captureIcon}
         </button>
 
         {/* Input */}
