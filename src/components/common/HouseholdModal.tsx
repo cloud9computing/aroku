@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { Family } from '../../firebase/family';
+import { Family, regenerateInviteCode, removeFamilyMember } from '../../firebase/family';
 import { signOutCurrentUser } from '../../firebase/auth';
-import { IconCheck, IconCopy, IconLogout, IconUsers, IconX } from '@tabler/icons-react';
+import { IconCheck, IconCopy, IconLogout, IconRefresh, IconUserMinus, IconUsers, IconX } from '@tabler/icons-react';
 
 interface HouseholdModalProps {
   isOpen: boolean;
   family: Family | null;
+  currentUid: string;
   onClose: () => void;
 }
 
-export const HouseholdModal: React.FC<HouseholdModalProps> = ({ isOpen, family, onClose }) => {
+export const HouseholdModal: React.FC<HouseholdModalProps> = ({ isOpen, family, currentUid, onClose }) => {
   const [copied, setCopied] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isCreator = Boolean(family && family.createdBy === currentUid);
 
   if (!isOpen) return null;
 
@@ -22,6 +26,36 @@ export const HouseholdModal: React.FC<HouseholdModalProps> = ({ isOpen, family, 
       setTimeout(() => setCopied(false), 1500);
     } catch (e) {
       /* clipboard unavailable */
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!family) return;
+    if (!window.confirm('Make a new invite code? The current one will stop working immediately.')) return;
+    setError(null);
+    setIsBusy(true);
+    try {
+      await regenerateInviteCode(family.id);
+    } catch (err) {
+      console.error(err);
+      setError('Could not make a new code. Try again.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleRemove = async (uid: string, name: string) => {
+    if (!family) return;
+    if (!window.confirm(`Remove ${name} from this family? They'll lose access to all of its records.`)) return;
+    setError(null);
+    setIsBusy(true);
+    try {
+      await removeFamilyMember(family.id, uid);
+    } catch (err) {
+      console.error(err);
+      setError(`Could not remove ${name}. Try again.`);
+    } finally {
+      setIsBusy(false);
     }
   };
 
@@ -55,8 +89,18 @@ export const HouseholdModal: React.FC<HouseholdModalProps> = ({ isOpen, family, 
               {copied ? <IconCheck size={16} className="text-sage" /> : <IconCopy size={16} className="text-ink-400" />}
             </button>
             <p className="text-[10px] text-ink-400 mt-1.5 leading-relaxed">
-              Anyone with this code can join and see everyone&apos;s records — share it only with family.
+              Anyone with this code can join and see everyone&apos;s records — share it only with family. Codes
+              expire after 14 days.
             </p>
+            {isCreator && (
+              <button
+                onClick={handleRegenerate}
+                disabled={isBusy}
+                className="mt-1.5 text-[10.5px] text-lavender font-medium flex items-center gap-1 hover:underline disabled:opacity-50"
+              >
+                <IconRefresh size={11} /> Make a new code
+              </button>
+            )}
           </div>
 
           <div>
@@ -77,10 +121,23 @@ export const HouseholdModal: React.FC<HouseholdModalProps> = ({ isOpen, family, 
                     <p className="text-[12px] font-medium text-ink-800 truncate">{m.displayName}</p>
                     <p className="text-[10px] text-ink-400 truncate">{m.email}</p>
                   </div>
+                  {isCreator && m.uid !== currentUid && (
+                    <button
+                      onClick={() => handleRemove(m.uid, m.displayName)}
+                      disabled={isBusy}
+                      className="ml-auto p-1 text-ink-300 hover:text-terracotta disabled:opacity-50 flex-shrink-0"
+                      title={`Remove ${m.displayName}`}
+                      aria-label={`Remove ${m.displayName}`}
+                    >
+                      <IconUserMinus size={14} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
+
+          {error && <p className="text-[11px] text-terracotta">{error}</p>}
 
           <button
             onClick={() => signOutCurrentUser()}

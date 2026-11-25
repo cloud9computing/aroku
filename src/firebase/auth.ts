@@ -5,7 +5,7 @@ import {
   signOut as firebaseSignOut,
   User,
 } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { clearIndexedDbPersistence, doc, getDoc, serverTimestamp, setDoc, terminate } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, googleProvider, yahooProvider, db, functions } from './config';
 
@@ -46,8 +46,20 @@ export async function signInWithYahoo(): Promise<void> {
   }
 }
 
+// Signing out must also wipe the offline copy of everyone's health records that
+// Firestore keeps in the browser — otherwise the next person using a shared
+// phone or laptop can still read it straight out of IndexedDB. The SDK has to be
+// shut down before its cache can be cleared, so the page reloads afterwards to
+// come back up clean.
 export async function signOutCurrentUser(): Promise<void> {
   await firebaseSignOut(auth);
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch (err) {
+    console.warn('Could not clear the local data cache on sign-out:', err);
+  }
+  window.location.reload();
 }
 
 export async function ensureUserProfile(user: User): Promise<UserProfile> {

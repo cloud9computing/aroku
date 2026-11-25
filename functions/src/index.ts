@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { randomInt } from 'crypto';
 import { getStorage } from 'firebase-admin/storage';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
@@ -25,15 +26,26 @@ async function assertFamilyMember(uid: string, familyId: string): Promise<void> 
 // membership (a real cross-service failure we hit in production), so instead the
 // user's familyId is baked into their Auth ID token as a custom claim — Storage
 // rules then check request.auth.token.familyId directly, no cross-service lookup
-// needed. This callable keeps that claim in sync with users/{uid}.familyId,
-// re-run on every app load so it also self-heals any account whose claim predates
-// this change or drifted (e.g. after joining/leaving a family).
+// needed. This callable keeps that claim in sync, re-run on every app load so it
+// also self-heals any account whose claim drifted.
+//
+// users/{uid}.familyId is only a pointer the client can read — the family's own
+// memberUids list is the source of truth, so the claim is only ever granted for
+// a family that actually lists this user as a member.
+async function resolveVerifiedFamilyId(uid: string): Promise<string | null> {
+  const userSnap = await db.collection('users').doc(uid).get();
+  const claimed: string | null = userSnap.data()?.familyId || null;
+  if (!claimed) return null;
+  const famSnap = await db.collection('families').doc(claimed).get();
+  const memberUids: string[] = famSnap.data()?.memberUids || [];
+  return famSnap.exists && memberUids.includes(uid) ? claimed : null;
+}
+
 export const syncFamilyClaim = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   const uid = request.auth.uid;
 
-  const userSnap = await db.collection('users').doc(uid).get();
-  const familyId: string | null = userSnap.data()?.familyId || null;
+  const familyId = await resolveVerifiedFamilyId(uid);
   const currentClaim = (request.auth.token as { familyId?: string }).familyId || null;
 
   if (currentClaim !== familyId) {
@@ -41,6 +53,163 @@ export const syncFamilyClaim = onCall({ cors: true }, async (request) => {
   }
 
   return { familyId };
+});
+
+// ---- Family membership: server-side only -------------------------------------
+// Clients can no longer write memberUids, invites, or users/{uid}.familyId
+// directly (see firestore.rules) — every change to who belongs to a family goes
+// through these functions, which can rate-limit and check who is asking.
+
+const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I
+const INVITE_LENGTH = 8;
+const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const JOIN_ATTEMPTS_PER_HOUR = 10;
+
+function newInviteCode(): string {
+  let code = '';
+  for (let i = 0; i < INVITE_LENGTH; i++) code += INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)];
+  return code;
+}
+
+async function mintInvite(familyId: string): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = newInviteCode();
+    try {
+      await db.collection('invites').doc(code).create({
+        familyId,
+        expiresAt: Timestamp.fromMillis(Date.now() + INVITE_TTL_MS),
+      });
+      return code;
+    } catch (err) {
+      if ((err as { code?: number }).code === 6) continue; // already exists — try another code
+      throw err;
+    }
+  }
+  throw new HttpsError('internal', 'Could not generate an invite code.');
+}
+
+function memberFromToken(request: { auth?: { uid: string; token: Record<string, any> } }) {
+  const token = request.auth!.token;
+  return {
+    uid: request.auth!.uid,
+    displayName: (token.name as string) || (token.email as string) || 'Family member',
+    email: (token.email as string) || '',
+    photoURL: (token.picture as string) || '',
+  };
+}
+
+async function enforceJoinRateLimit(uid: string): Promise<void> {
+  const ref = db.collection('rateLimits').doc(uid);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Date.now();
+    const data = snap.data() as { count?: number; windowStart?: number } | undefined;
+    const windowStart = data?.windowStart && now - data.windowStart < 3600_000 ? data.windowStart : now;
+    const count = data?.windowStart && windowStart === data.windowStart ? data.count || 0 : 0;
+    if (count >= JOIN_ATTEMPTS_PER_HOUR) {
+      throw new HttpsError('resource-exhausted', 'Too many attempts. Try again in an hour.');
+    }
+    tx.set(ref, { count: count + 1, windowStart });
+  });
+}
+
+export const createFamily = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const uid = request.auth.uid;
+  const member = memberFromToken(request as any);
+  const rawName = String((request.data as { name?: string })?.name || '').trim().slice(0, 60);
+
+  const userRef = db.collection('users').doc(uid);
+  if ((await userRef.get()).data()?.familyId) {
+    throw new HttpsError('failed-precondition', 'You already belong to a family.');
+  }
+
+  const famRef = db.collection('families').doc();
+  const inviteCode = await mintInvite(famRef.id);
+  await famRef.set({
+    name: rawName || `${member.displayName}'s family`,
+    inviteCode,
+    createdAt: FieldValue.serverTimestamp(),
+    createdBy: uid,
+    memberUids: [uid],
+    members: { [uid]: member },
+  });
+  await userRef.set({ familyId: famRef.id }, { merge: true });
+  return { familyId: famRef.id };
+});
+
+export const joinFamily = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const uid = request.auth.uid;
+  const code = String((request.data as { code?: string })?.code || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{6,8}$/.test(code)) throw new HttpsError('invalid-argument', 'That invite code is not valid.');
+
+  await enforceJoinRateLimit(uid);
+
+  const userRef = db.collection('users').doc(uid);
+  if ((await userRef.get()).data()?.familyId) {
+    throw new HttpsError('failed-precondition', 'You already belong to a family.');
+  }
+
+  const inviteSnap = await db.collection('invites').doc(code).get();
+  const invite = inviteSnap.data() as { familyId?: string; expiresAt?: Timestamp } | undefined;
+  // Codes minted before expiry existed have no expiresAt and stay valid until
+  // someone regenerates the code (which deletes the old one).
+  const expired = invite?.expiresAt ? invite.expiresAt.toMillis() < Date.now() : false;
+  if (!inviteSnap.exists || !invite?.familyId || expired) {
+    throw new HttpsError('not-found', 'That invite code was not found or has expired.');
+  }
+
+  const famRef = db.collection('families').doc(invite.familyId);
+  if (!(await famRef.get()).exists) throw new HttpsError('not-found', 'That family no longer exists.');
+
+  await famRef.update({
+    memberUids: FieldValue.arrayUnion(uid),
+    [`members.${uid}`]: memberFromToken(request as any),
+  });
+  await userRef.set({ familyId: invite.familyId }, { merge: true });
+  await db.collection('rateLimits').doc(uid).delete();
+  return { familyId: invite.familyId };
+});
+
+async function assertFamilyCreator(uid: string, familyId: string) {
+  await assertFamilyMember(uid, familyId);
+  const snap = await db.collection('families').doc(familyId).get();
+  if (snap.data()?.createdBy !== uid) {
+    throw new HttpsError('permission-denied', 'Only the person who created the family can do that.');
+  }
+  return snap;
+}
+
+export const regenerateInviteCode = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const { familyId } = request.data as { familyId: string };
+  const snap = await assertFamilyCreator(request.auth.uid, familyId);
+
+  const oldCode: string | undefined = snap.data()?.inviteCode;
+  const inviteCode = await mintInvite(familyId);
+  await db.collection('families').doc(familyId).update({ inviteCode });
+  if (oldCode) await db.collection('invites').doc(oldCode).delete().catch(() => undefined);
+  return { inviteCode };
+});
+
+export const removeFamilyMember = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const { familyId, memberUid } = request.data as { familyId: string; memberUid: string };
+  await assertFamilyCreator(request.auth.uid, familyId);
+  if (!memberUid || memberUid === request.auth.uid) {
+    throw new HttpsError('invalid-argument', 'You can only remove other members.');
+  }
+
+  await db.collection('families').doc(familyId).update({
+    memberUids: FieldValue.arrayRemove(memberUid),
+    [`members.${memberUid}`]: FieldValue.delete(),
+  });
+  await db.collection('users').doc(memberUid).set({ familyId: null }, { merge: true });
+  // Their current ID token keeps the old claim until it refreshes (up to an
+  // hour); clearing it here means the next refresh drops Storage access too.
+  await getAuth().setCustomUserClaims(memberUid, { familyId: null });
+  return { ok: true };
 });
 
 async function callGemini(apiKey: string, parts: unknown[]): Promise<string> {
