@@ -20,7 +20,7 @@ export const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ user, onFami
     setError(null);
     setIsSubmitting(true);
     try {
-      const familyId = await createFamily(user, familyName.trim());
+      const familyId = await createFamily(familyName.trim());
       onFamilyReady(familyId);
     } catch (err) {
       console.error(err);
@@ -33,10 +33,10 @@ export const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ user, onFami
     setError(null);
     setIsSubmitting(true);
     try {
-      const familyId = await joinFamilyWithCode(user, inviteCode);
+      const familyId = await joinFamilyWithCode(inviteCode);
       onFamilyReady(familyId);
     } catch (err: any) {
-      setError(err?.message || 'Could not join with that code.');
+      setError(err?.message?.replace(/^.*?:\s*/, '') || 'Could not join with that code.');
       setIsSubmitting(false);
     }
   };
@@ -97,8 +97,8 @@ export const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ user, onFami
               type="text"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-              placeholder="6-letter invite code"
-              maxLength={6}
+              placeholder="Invite code"
+              maxLength={8}
               className="w-full px-3 py-2.5 bg-white border border-paper-300 rounded-xl text-sm text-ink-800 tracking-[0.3em] text-center font-mono focus:outline-none focus:border-terracotta"
             />
             <button

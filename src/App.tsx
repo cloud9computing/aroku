@@ -379,7 +379,7 @@ export const App: React.FC = () => {
           onClose={() => setIsNotificationsOpen(false)}
         />
 
-        <HouseholdModal isOpen={isHouseholdOpen} family={family} onClose={() => setIsHouseholdOpen(false)} />
+        <HouseholdModal isOpen={isHouseholdOpen} family={family} currentUid={userProfile.uid} onClose={() => setIsHouseholdOpen(false)} />
 
         <CaptureModal
           isOpen={isCaptureOpen}
