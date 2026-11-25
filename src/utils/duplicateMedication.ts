@@ -29,3 +29,27 @@ export function findActiveMedicationsByMolecule(existing: Medication[], molecule
   const norm = normalize(molecule);
   return existing.filter((m) => m.status === 'active' && normalize(m.molecule) === norm);
 }
+
+// Looser than findActiveMedicationsByMolecule — matches a brand name too, and
+// a partial/substring match either direction, so "stop glucophage" can still
+// find an entry logged as molecule "Metformin" with brand_name "Glucophage",
+// and "stop the metformin" still finds "Metformin HCl". Used for stopping a
+// medicine, where the caregiver's wording is less likely to exactly match
+// what's on file than a molecule name they're actively adjusting the dose of —
+// every match is shown to the caregiver to confirm, never acted on silently.
+export function findActiveMedicationsFuzzy(existing: Medication[], query: string): Medication[] {
+  const norm = normalize(query);
+  if (!norm) return [];
+  return existing.filter((m) => {
+    if (m.status !== 'active') return false;
+    const molNorm = normalize(m.molecule);
+    const brandNorm = m.brand_name ? normalize(m.brand_name) : '';
+    return (
+      molNorm === norm ||
+      brandNorm === norm ||
+      molNorm.includes(norm) ||
+      norm.includes(molNorm) ||
+      (brandNorm !== '' && (brandNorm.includes(norm) || norm.includes(brandNorm)))
+    );
+  });
+}

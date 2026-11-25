@@ -14,12 +14,21 @@ export interface ExtractedMedication {
   notes?: string;
 }
 
+export interface ExtractedFollowUpVisit {
+  doctor_name: string;
+  specialty?: string;
+  date: string;
+  reason?: string;
+}
+
 export interface ExtractionResult {
   doc_type: 'lab' | 'imaging' | 'prescription' | 'consultation_note' | 'discharge' | 'bill';
   title: string;
   doctor_name?: string;
   specialty?: string;
   facility?: string;
+  phone?: string;
+  address?: string;
   date: string;
   condition_tags: string[];
   facts: Array<{
@@ -32,6 +41,9 @@ export interface ExtractionResult {
     flag?: 'normal' | 'abnormal' | 'critical' | 'info';
   }>;
   medications: ExtractedMedication[];
+  // Present only when the document explicitly names a next/follow-up
+  // appointment with a real date — never a guess.
+  follow_up_visit?: ExtractedFollowUpVisit;
 }
 
 const extractFactsFn = httpsCallable(functions, 'extractFacts');
@@ -45,16 +57,23 @@ export async function extractFactsFromImageOrText(
 ): Promise<ExtractionResult> {
   const { data } = await extractFactsFn({ familyId, ...input });
   const parsed = data as Partial<ExtractionResult>;
+  const followUp = parsed.follow_up_visit as Partial<ExtractedFollowUpVisit> | undefined;
   return {
     doc_type: parsed.doc_type || 'lab',
     title: parsed.title || 'Extracted Clinical Report',
     doctor_name: parsed.doctor_name || undefined,
     specialty: parsed.specialty || undefined,
     facility: parsed.facility || undefined,
+    phone: parsed.phone || undefined,
+    address: parsed.address || undefined,
     date: parsed.date || new Date().toISOString().split('T')[0],
     condition_tags: Array.isArray(parsed.condition_tags) ? parsed.condition_tags : ['General'],
     facts: Array.isArray(parsed.facts) ? parsed.facts : [],
     medications: Array.isArray(parsed.medications) ? parsed.medications : [],
+    follow_up_visit:
+      followUp && followUp.doctor_name && followUp.date
+        ? { doctor_name: followUp.doctor_name, specialty: followUp.specialty || undefined, date: followUp.date, reason: followUp.reason || undefined }
+        : undefined,
   };
 }
 
@@ -113,6 +132,13 @@ export interface ProposedScheduledTest {
   notes?: string;
 }
 
+export interface ProposedMedicationStop {
+  molecule: string;
+  current_strength?: string;
+  stop_times?: ('morning' | 'afternoon' | 'evening' | 'night')[];
+  stop_reason?: string;
+}
+
 export interface AssistantQueryResult {
   type:
     | 'visit_draft'
@@ -122,6 +148,7 @@ export interface AssistantQueryResult {
     | 'medication_list_draft'
     | 'medication_update_draft'
     | 'schedule_test_draft'
+    | 'medication_stop_draft'
     | 'general';
   message: string;
   proposedVisit?: {
@@ -142,6 +169,7 @@ export interface AssistantQueryResult {
   medicationUpdate?: ProposedMedicationUpdate;
   proposedMedications?: ProposedMedicationPayload[];
   proposedScheduledTest?: ProposedScheduledTest;
+  medicationStop?: ProposedMedicationStop;
   trend_fact_name?: string;
   factCitations?: Array<{ title: string; fact_name: string; value: string; date: string }>;
 }

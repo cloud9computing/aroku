@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { auth, googleProvider, db, functions } from './config';
+import { auth, googleProvider, yahooProvider, db, functions } from './config';
 
 export interface UserProfile {
   uid: string;
@@ -28,6 +28,18 @@ export async function signInWithGoogle(): Promise<void> {
     // Popups are blocked on some mobile/in-app browsers — fall back to a full redirect.
     if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/operation-not-supported-in-this-environment') {
       await signInWithRedirect(auth, googleProvider);
+    } else {
+      throw err;
+    }
+  }
+}
+
+export async function signInWithYahoo(): Promise<void> {
+  try {
+    await signInWithPopup(auth, yahooProvider);
+  } catch (err: any) {
+    if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/operation-not-supported-in-this-environment') {
+      await signInWithRedirect(auth, yahooProvider);
     } else {
       throw err;
     }

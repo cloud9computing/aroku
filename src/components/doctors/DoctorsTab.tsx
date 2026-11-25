@@ -5,6 +5,7 @@ import { filterDoctorsForSpecies, patientTypeForSpecies } from '../../utils/care
 import { buildDirectionsUrl } from '../../utils/directions';
 import { AddDoctorModal } from './AddDoctorModal';
 import { DoctorDetailModal } from './DoctorDetailModal';
+import { EmptyState } from '../common/EmptyState';
 
 interface DoctorsTabProps {
   doctors: CareTeamMember[];
@@ -43,16 +44,18 @@ export const DoctorsTab: React.FC<DoctorsTabProps> = ({
 
       <div className="px-4.5 flex-1 min-h-0 overflow-y-auto space-y-2">
         {sorted.length === 0 ? (
-          <div className="text-center py-14 space-y-2">
-            <div className="w-11 h-11 rounded-full bg-terracotta-light text-terracotta flex items-center justify-center mx-auto">
-              <IconStethoscope size={20} />
-            </div>
-            <p className="text-xs text-ink-400 max-w-[220px] mx-auto leading-relaxed">
-              {personSpecies === 'human'
+          <EmptyState
+            icon={<IconStethoscope size={24} />}
+            color="terracotta"
+            title={personSpecies === 'human' ? 'No doctors yet' : 'No vets yet'}
+            description={
+              personSpecies === 'human'
                 ? 'Keep every doctor your family sees — or has been recommended — in one place, with their contact details.'
-                : "Keep every vet this pet sees — or has been recommended — in one place, with their contact details."}
-            </p>
-          </div>
+                : "Keep every vet this pet sees — or has been recommended — in one place, with their contact details."
+            }
+            ctaLabel={personSpecies === 'human' ? 'Add a doctor' : 'Add a vet'}
+            onCta={() => setIsAddOpen(true)}
+          />
         ) : (
           sorted.map((doc) => (
             <div

@@ -6,7 +6,26 @@
     <meta name="theme-color" content="#FBFAF6" />
     <meta name="description" content="What's new in aroku — a running list for the family." />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&display=swap"
+      rel="stylesheet"
+    />
     <title>Changelog · aroku</title>
+
+    <!-- Social share preview (Twitter/X, WhatsApp, iMessage, etc.) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://healthyfam-fccd7.web.app/changelog" />
+    <meta property="og:title" content="Your specialists don't talk to each other. Let Aroku talk to them." />
+    <meta property="og:description" content="Ever wished all the various specialist doctors you consult were on a group chat with you, with full shared context about your parent/pet, instead of each one operating in their own silos? Aroku is that shared context you can walk into every doctor consultation with." />
+    <meta property="og:image" content="https://healthyfam-fccd7.web.app/og-changelog.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Your specialists don't talk to each other. Let Aroku talk to them." />
+    <meta name="twitter:description" content="Ever wished all the various specialist doctors you consult were on a group chat with you, with full shared context about your parent/pet, instead of each one operating in their own silos? Aroku is that shared context you can walk into every doctor consultation with." />
+    <meta name="twitter:image" content="https://healthyfam-fccd7.web.app/og-changelog.png" />
     <style>
       :root {
         --bg: #FBFAF6;
@@ -121,8 +140,10 @@
       }
 
       h1 {
-        font-family: Georgia, Cambria, "Times New Roman", serif;
+        font-family: "Fraunces", Georgia, Cambria, "Times New Roman", serif;
+        font-optical-sizing: auto;
         font-size: clamp(28px, 5vw, 36px);
+        font-weight: 600;
         line-height: 1.15;
         letter-spacing: -0.01em;
         margin: 0 0 10px;
@@ -187,7 +208,8 @@
       .badge.ochre { background: var(--ochre-tint); color: var(--ochre); }
 
       h2 {
-        font-family: Georgia, Cambria, "Times New Roman", serif;
+        font-family: "Fraunces", Georgia, Cambria, "Times New Roman", serif;
+        font-optical-sizing: auto;
         font-size: 19px;
         font-weight: 700;
         margin: 0;
@@ -232,6 +254,20 @@
         font-size: 12.5px;
         line-height: 1.5;
         color: var(--text-muted);
+      }
+
+      .new-tag {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--terracotta);
+        background: var(--terracotta-tint);
+        padding: 2px 6px;
+        border-radius: 5px;
+        margin-left: 6px;
+        vertical-align: 1px;
       }
 
       .install-box {
@@ -281,6 +317,148 @@
 
       .install-steps b { color: var(--terracotta); }
 
+      /* ---- illustrative mock-ups (not literal screenshots — drawn in the
+         app's own palette to show roughly what each thing looks like) ---- */
+
+      .mock {
+        margin-top: 16px;
+        margin-left: 42px;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: 14px;
+        padding: 12px;
+        max-width: 340px;
+      }
+
+      @media (max-width: 480px) {
+        .mock { margin-left: 0; max-width: none; }
+      }
+
+      .mock-caption {
+        font-size: 10.5px;
+        color: var(--text-faint);
+        margin: 6px 0 0 42px;
+      }
+
+      @media (max-width: 480px) {
+        .mock-caption { margin-left: 0; }
+      }
+
+      /* chat mock */
+      .chat-row { display: flex; margin-bottom: 8px; }
+      .chat-row.user { justify-content: flex-end; }
+      .chat-bubble-user {
+        background: var(--terracotta);
+        color: #fff;
+        font-size: 12px;
+        padding: 7px 11px;
+        border-radius: 12px 12px 3px 12px;
+        max-width: 80%;
+      }
+      .chat-assistant { width: 100%; }
+      .chat-card {
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        padding: 9px 10px;
+        margin-bottom: 7px;
+      }
+      .chat-card-title { font-size: 12px; font-weight: 600; margin: 0; color: var(--text); }
+      .chat-card-title .sec { font-weight: 400; color: var(--text-muted); }
+      .chat-card-line { font-size: 10.5px; color: var(--text-muted); margin: 2px 0 0; }
+      .chat-card-action { font-size: 10.5px; font-weight: 600; margin: 3px 0 0; }
+      .chat-card-action.stop { color: var(--terracotta); }
+      .chat-card-action.keep { color: var(--sage); }
+      .chat-btns { display: flex; gap: 6px; }
+      .chat-btn {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 0;
+        border-radius: 8px;
+        text-align: center;
+        flex: 1;
+      }
+      .chat-btn.primary { background: var(--terracotta-tint); color: var(--terracotta); }
+      .chat-btn.ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--text-faint); flex: 0 0 auto; padding: 6px 12px; }
+
+      /* records mock */
+      .rec-row { display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; }
+      .rec-dot {
+        width: 20px; height: 20px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; flex-shrink: 0; margin-top: 1px;
+      }
+      .rec-dot.sage { background: var(--sage-tint); }
+      .rec-dot.ochre { background: var(--ochre-tint); }
+      .rec-line-top { display: flex; justify-content: space-between; gap: 8px; }
+      .rec-title { font-size: 12px; font-weight: 600; color: var(--text); }
+      .rec-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; }
+      .rec-when { font-size: 10px; color: var(--text-faint); white-space: nowrap; }
+      .rec-when.terracotta { color: var(--terracotta); font-weight: 700; }
+      .rec-scheduled {
+        border: 1px dashed var(--terracotta);
+        background: var(--terracotta-tint);
+        border-radius: 10px;
+        margin: 4px 0;
+        padding: 8px 9px;
+      }
+      .rec-actions { display: flex; gap: 10px; margin-top: 5px; }
+      .rec-action { font-size: 10px; font-weight: 600; }
+      .rec-action.a1 { color: var(--terracotta); }
+      .rec-action.a2 { color: var(--sage); }
+      .rec-action.a3 { color: var(--lavender); }
+
+      /* trend chart mock */
+      .trend-label {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+        color: var(--text-faint); margin: 0 0 4px;
+      }
+
+      /* pets mock */
+      .pets-row { display: flex; align-items: center; gap: 18px; }
+      .pet-avatar {
+        width: 42px; height: 42px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 14px; margin: 0 auto;
+      }
+      .pet-avatar.human { background: var(--terracotta-tint); color: var(--terracotta); }
+      .pet-avatar.pet { background: var(--sage-tint); color: var(--sage); font-size: 19px; }
+      .pet-label { font-size: 10.5px; color: var(--text-muted); margin: 5px 0 0; text-align: center; }
+      .pets-divider { width: 1px; align-self: stretch; background: var(--border-strong); }
+      .pets-checklist { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--text); }
+      .pets-checklist span.tick { color: var(--sage); margin-right: 5px; }
+
+      /* AI prep-question mock */
+      .prep-q { display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+      .prep-q:last-child { border-bottom: none; }
+      .prep-check { width: 13px; height: 13px; border-radius: 50%; background: var(--terracotta); flex-shrink: 0; margin-top: 3px; }
+      .prep-text { font-size: 11.5px; color: var(--text); line-height: 1.45; margin: 0; }
+      .prep-why { font-size: 10px; color: var(--text-faint); margin: 3px 0 0; font-style: italic; }
+
+      /* capture → extract → verify mock */
+      .capture-row { display: flex; gap: 8px; margin-bottom: 8px; }
+      .capture-btn {
+        flex: 1; text-align: center; font-size: 11px; font-weight: 600;
+        padding: 9px 6px; border-radius: 9px;
+        background: var(--surface-sunken); border: 1px solid var(--border-strong); color: var(--text);
+      }
+      .capture-btn.primary { background: var(--terracotta); color: #fff; border-color: var(--terracotta); }
+      .capture-arrow { text-align: center; font-size: 10px; color: var(--text-faint); margin: 2px 0 10px; }
+      .fact-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--border-strong); }
+      .fact-row:last-child { border-bottom: none; }
+      .fact-name { font-size: 11.5px; font-weight: 600; color: var(--text); margin: 0; }
+      .fact-value { font-size: 11px; color: var(--text-muted); margin: 1px 0 0; }
+      .fact-unit { color: var(--text-faint); }
+      .fact-flag {
+        font-size: 8.5px; font-weight: 700; text-transform: uppercase;
+        color: var(--ochre); background: var(--ochre-tint);
+        padding: 1px 5px; border-radius: 5px; margin-left: 5px;
+      }
+      .fact-verify {
+        font-size: 10px; font-weight: 600; color: var(--sage);
+        background: var(--sage-tint); padding: 4px 9px; border-radius: 7px; flex-shrink: 0;
+      }
+
       footer.end {
         margin-top: 36px;
         padding-top: 28px;
@@ -305,10 +483,10 @@
 
       <header class="top">
         <p class="wordmark">Aroku</p>
-        <h1>Everything the app can do for us, so far</h1>
-        <p class="dek">A running list of what's live in Aroku — no update to install, it's already there next time you open it.</p>
+        <h1>Your specialists don't talk to each other. Let Aroku talk to them.</h1>
+        <p class="dek">Ever wished all the various specialist doctors you consult were on a group chat with you, with full shared context about your parent/pet, instead of each one operating in their own silos? Aroku is that shared context you can walk into every doctor consultation with.</p>
         <div class="meta-line">
-          <span>Last updated 3 September 2026</span>
+          <span>Last updated 7 September 2026</span>
           <span class="dot"></span>
           <span>Works the same on everyone's phone</span>
         </div>
@@ -332,10 +510,37 @@
           <h2>Talk to Aroku</h2>
         </div>
         <ul class="points">
-          <li>Ask it anything about the family's records, medicines, or visits — it answers from what's actually saved, and shows you which record it got the answer from.</li>
+          <li>Ask it anything about the family's records, medicines, or visits — it answers only from what's actually saved, with a link back to the source, and draws an actual trend chart when there's history to show <span class="sub">("how has his HbA1c been?")</span>.</li>
+          <li><b>Add a medicine</b> — one, or a whole list at once — just by describing it in plain language.</li>
+          <li><b>Change a dose or timing</b> on a medicine already on the list <span class="sub">("increase metformin to 1000mg")</span>.</li>
+          <li><b>Stop a medicine</b><span class="new-tag">New</span> — entirely, or just one dose while the rest continues <span class="sub">("stop the evening dose of metformin, keep the morning one")</span>. It always shows you the exact medicine it means and waits for a tap before touching anything — never a silent guess.</li>
+          <li><b>Book an appointment</b> just by describing it <span class="sub">("appointment with Dr Nair next Thursday at 4:30")</span>.</li>
+          <li><b>Schedule a not-yet-done test</b><span class="new-tag">New</span> as a reminder <span class="sub">("schedule an HbA1c test for next Monday")</span> — it shows up as a card in Records on that date.</li>
           <li>Tell it something to pass along to a doctor ("tell Dr. Iyer about the dizziness") — it drafts a note that shows up automatically on that doctor's next visit.</li>
-          <li>Add a medicine or an appointment just by describing it in plain language — it always asks you to confirm before saving anything.</li>
+          <li>Nothing above ever saves itself — every draft shows up for a confirm-or-cancel tap first.</li>
         </ul>
+        <div class="mock" aria-hidden="true">
+          <div class="chat-row user"><div class="chat-bubble-user">How's his HbA1c trend?</div></div>
+          <div class="chat-row"><div class="chat-assistant">
+            <p class="trend-label">HbA1c</p>
+            <div class="chat-card">
+              <svg viewBox="0 0 260 100" width="100%" height="92">
+                <line x1="10" y1="80" x2="250" y2="80" stroke="var(--border-strong)" stroke-width="1" />
+                <polyline points="20,25 130,45 240,60" fill="none" stroke="var(--terracotta)" stroke-width="2.5" />
+                <circle cx="20" cy="25" r="4" fill="var(--sage)" />
+                <circle cx="130" cy="45" r="4" fill="var(--sage)" />
+                <circle cx="240" cy="60" r="4" fill="var(--sage)" />
+                <text x="20" y="16" font-size="11" text-anchor="middle" fill="var(--text)" font-weight="600">7.4%</text>
+                <text x="130" y="36" font-size="11" text-anchor="middle" fill="var(--text)" font-weight="600">7.1%</text>
+                <text x="240" y="51" font-size="11" text-anchor="middle" fill="var(--text)" font-weight="600">6.8%</text>
+                <text x="20" y="95" font-size="9.5" text-anchor="middle" fill="var(--text-faint)">Mar</text>
+                <text x="130" y="95" font-size="9.5" text-anchor="middle" fill="var(--text-faint)">Jun</text>
+                <text x="240" y="95" font-size="9.5" text-anchor="middle" fill="var(--text-faint)">Sep</text>
+              </svg>
+            </div>
+          </div></div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot. A real trend only ever appears once there are 2+ verified readings.</p>
       </section>
 
       <section class="feature">
@@ -344,11 +549,59 @@
           <h2>Records</h2>
         </div>
         <ul class="points">
-          <li>Scan or upload a lab report, prescription, or discharge summary — it reads out the values, diagnoses, and medicines for you.</li>
+          <li>Scan or upload a lab report, prescription, or discharge summary — it reads out the values, diagnoses, and medicines for you, and now captures every page of a multi-page report in one go.</li>
           <li>Nothing is trusted blindly: every extracted value sits there until someone taps <b>Verify</b>.</li>
           <li>Medicines spotted in a scan show up right on the record with a one-tap <b>Add to your medicines</b>.</li>
           <li>Records file themselves into the right month automatically, and a <b>Merge similar test names</b> tool keeps trend charts accurate when the same test gets labelled differently across reports.</li>
+          <li><b>Scheduled test reminders</b><span class="new-tag">New</span> — ask Aroku to schedule a test and a reminder card sits right in the timeline on its due date. Attach the report when it's ready, mark it done by hand, reschedule it, or remove it — and it flags itself if the date's passed with nothing done yet.</li>
+          <li>The toolbar's tidier now — <b>Merge similar test names</b> and <b>Find medicines in past scans</b> live behind a small <b>⋯</b> menu instead of crowding the top of the screen.</li>
         </ul>
+
+        <div class="mock" aria-hidden="true">
+          <div class="capture-row">
+            <div class="capture-btn primary">📷 Open Camera</div>
+            <div class="capture-btn">⬆️ Upload Photo / PDF</div>
+          </div>
+          <p class="capture-arrow">↓ read by Gemini AI, in seconds</p>
+          <div class="chat-card" style="margin-bottom: 0;">
+            <p class="rec-title" style="margin: 0 0 6px;">Lipid Panel · 2 values extracted</p>
+            <div class="fact-row">
+              <div>
+                <p class="fact-name">Creatinine</p>
+                <p class="fact-value">1.1 <span class="fact-unit">mg/dL</span></p>
+              </div>
+              <span class="fact-verify">Verify</span>
+            </div>
+            <div class="fact-row">
+              <div>
+                <p class="fact-name">Potassium<span class="fact-flag">Abnormal</span></p>
+                <p class="fact-value">5.8 <span class="fact-unit">mEq/L</span></p>
+              </div>
+              <span class="fact-verify">Verify</span>
+            </div>
+          </div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot. Every value stays unverified until you tap it, whichever way it came in.</p>
+
+        <div class="mock" aria-hidden="true">
+          <div class="rec-row">
+            <div class="rec-dot sage">🧪</div>
+            <div style="flex:1">
+              <div class="rec-line-top"><span class="rec-title">Lipid Panel</span><span class="rec-when">12 Aug</span></div>
+              <p class="rec-sub">Verified</p>
+            </div>
+          </div>
+          <div class="rec-scheduled">
+            <div class="rec-line-top"><span class="rec-title">HbA1c</span><span class="rec-when terracotta">In 3 days</span></div>
+            <p class="rec-sub">Scheduled 11 Sep</p>
+            <div class="rec-actions">
+              <span class="rec-action a1">Attach report</span>
+              <span class="rec-action a2">Mark complete</span>
+              <span class="rec-action a3">Reschedule</span>
+            </div>
+          </div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot.</p>
       </section>
 
       <section class="feature">
@@ -360,7 +613,25 @@
           <li>The full active list, grouped by time of day, so today's doses are obvious at a glance.</li>
           <li>Medicines with a stated end date flag themselves once the course is over.</li>
           <li>A dedicated <b>Capture Prescription</b> option scans a prescription straight into the list.</li>
+          <li><b>Stop a medicine</b><span class="new-tag">New</span> — fully or partially — just by telling Aroku. It always shows you the exact medicine before touching anything.</li>
         </ul>
+
+        <div class="mock" aria-hidden="true">
+          <p class="trend-label">Stop a medicine, from chat</p>
+          <div class="chat-row user"><div class="chat-bubble-user">Stop the evening dose of metformin</div></div>
+          <div class="chat-row"><div class="chat-assistant">
+            <div class="chat-card">
+              <p class="chat-card-title">Metformin 500mg <span class="sec">(Glucophage)</span></p>
+              <p class="chat-card-line">Currently: morning, evening</p>
+              <p class="chat-card-action stop">Will continue at morning only</p>
+            </div>
+            <div class="chat-btns">
+              <div class="chat-btn primary">Confirm</div>
+              <div class="chat-btn ghost">Not now</div>
+            </div>
+          </div></div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot.</p>
       </section>
 
       <section class="feature">
@@ -372,8 +643,44 @@
           <li>Upcoming and past appointments live on one timeline.</li>
           <li>Before an appointment, it drafts questions to ask — the point is connecting dots between specialists who never talk to each other <span class="sub">("your cardiologist started X — does that need to pause before today's procedure?")</span>.</li>
           <li>After the appointment, mark it complete with a recap: upload the recording <span class="sub">(it transcribes, detects the language, and translates to English if it wasn't in English)</span>, scan a written summary, or just type the key takeaways.</li>
+          <li>A saved recap can now be <b>edited</b><span class="new-tag">New</span> afterwards, if something needs correcting or adding.</li>
+          <li>An upcoming visit's <b>Edit details</b><span class="new-tag">New</span> now covers everything — doctor, specialty, location, reason, date and time — not just the date, plus a one-tap <b>Mark completed</b>.</li>
+          <li>A visit whose date has passed without being marked complete now flags itself in ochre, right on the timeline, so it doesn't get quietly forgotten.</li>
+          <li><b>Capture Appointment</b><span class="new-tag">New</span> — scan a consultation sheet from the Visits tab, and if it mentions a follow-up date, Aroku offers to add it straight to your Visits.</li>
           <li>Share a pre-visit brief straight to WhatsApp, or print a one-page sheet to hand a specialist.</li>
         </ul>
+
+        <div class="mock" aria-hidden="true">
+          <p class="trend-label">AI-drafted prep questions</p>
+          <div class="chat-card" style="margin-bottom: 0;">
+            <div class="prep-q">
+              <div class="prep-check"></div>
+              <div>
+                <p class="prep-text">Dr. Iyer (Vascular) started clopidogrel 75mg on 12 Jun — does that need to pause before today's procedure?</p>
+                <p class="prep-why">Why asked: connects a medication change from a different specialist to today's visit</p>
+              </div>
+            </div>
+            <div class="prep-q">
+              <div class="prep-check"></div>
+              <div>
+                <p class="prep-text">Her HbA1c was 7.4% in March — does the new eye finding change the diabetes plan?</p>
+                <p class="prep-why">Why asked: links a lab trend to a finding from a different doctor's report</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot. Drafted before the visit, from what's already on file.</p>
+
+        <div class="mock" aria-hidden="true">
+          <p class="trend-label">Uploaded recording → auto-summarized</p>
+          <div class="chat-card" style="margin-bottom: 0;">
+            <p class="rec-title" style="margin: 0 0 4px;">🎙️ Consultation recording</p>
+            <p class="prep-why" style="font-style: normal; color: var(--text-muted); margin: 0 0 8px;">Detected language: Hindi — translated to English below.</p>
+            <p class="rec-sub" style="color: var(--text); margin: 0 0 8px;">&ldquo;Discussed the recent eye exam findings; insulin dose increased slightly, with more frequent glucose checks for the next two weeks.&rdquo;</p>
+            <p class="prep-why" style="font-style: normal; color: var(--sage); font-weight: 600; margin: 0;">✓ Decision: Insulin increased to 12 units</p>
+          </div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot. Works in any language — transcribed, translated, and summarized.</p>
       </section>
 
       <section class="feature">
@@ -384,8 +691,20 @@
         <ul class="points">
           <li>Every doctor's contact details in one place — tap <b>Call</b> or <b>Directions</b> right from the card.</li>
           <li>Human doctors and pets' vets are kept separate, so switching to a pet's profile only shows their vets.</li>
+          <li><b>Capture Doctor Details</b><span class="new-tag">New</span> — scan a visiting card or a prescription pad header from the Doctors tab, and it pulls out the name, specialty, clinic, phone, and address for you to confirm.</li>
         </ul>
         <div class="callout">Directions works best if you paste in a Google Maps link — a typed address still works, it just searches instead.</div>
+      </section>
+
+      <section class="feature">
+        <div class="feature-head">
+          <div class="badge ochre">🔔</div>
+          <h2>Reminders</h2>
+        </div>
+        <ul class="points">
+          <li><b>Heads-up notifications</b><span class="new-tag">New</span> — 7, 3, and 1 day before an upcoming visit or a scheduled test, a reminder shows up under the bell at the top of the app.</li>
+          <li>Tap one to jump straight to the visit or the test that needs attention.</li>
+        </ul>
       </section>
 
       <section class="feature">
@@ -395,7 +714,28 @@
         </div>
         <ul class="points">
           <li>Records, medicines, visits, and doctors all work exactly the same way for a dog, cat, or other pet — not a separate, cut-down version.</li>
+          <li>Even Talk to Aroku adapts — ask it to schedule a deworming or a vet visit the same way you'd ask about a person's test or appointment.</li>
         </ul>
+        <div class="mock" aria-hidden="true">
+          <div class="pets-row">
+            <div>
+              <div class="pet-avatar human">RT</div>
+              <p class="pet-label">Ravi</p>
+            </div>
+            <div>
+              <div class="pet-avatar pet">🐾</div>
+              <p class="pet-label">Bruno</p>
+            </div>
+            <div class="pets-divider"></div>
+            <div class="pets-checklist">
+              <div><span class="tick">✓</span>Records</div>
+              <div><span class="tick">✓</span>Medicines</div>
+              <div><span class="tick">✓</span>Visits</div>
+              <div><span class="tick">✓</span>Doctors</div>
+            </div>
+          </div>
+        </div>
+        <p class="mock-caption">Illustrative — not an exact screenshot. Same four tabs, same features, switch profiles at the top.</p>
       </section>
 
       <footer class="end">

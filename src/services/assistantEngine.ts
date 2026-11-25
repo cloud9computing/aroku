@@ -45,6 +45,13 @@ export interface ProposedScheduledTest {
   notes?: string;
 }
 
+export interface ProposedMedicationStop {
+  molecule: string;
+  current_strength?: string;
+  stop_times?: TimeOfDay[];
+  stop_reason?: string;
+}
+
 export interface AssistantResponse {
   type:
     | 'visit_draft'
@@ -54,6 +61,7 @@ export interface AssistantResponse {
     | 'medication_list_draft'
     | 'medication_update_draft'
     | 'schedule_test_draft'
+    | 'medication_stop_draft'
     | 'general';
   message: string;
   proposedVisit?: ProposedVisit;
@@ -62,6 +70,7 @@ export interface AssistantResponse {
   proposedMedications?: ProposedMedication[];
   medicationUpdate?: ProposedMedicationUpdate;
   proposedScheduledTest?: ProposedScheduledTest;
+  medicationStop?: ProposedMedicationStop;
   trend_fact_name?: string;
   factCitations?: Array<{ title: string; fact_name: string; value: string; date: string }>;
 }
@@ -139,6 +148,29 @@ export function parseAssistantInputLocal(input: string, careTeam: CareTeamMember
         food_relation,
         start_date_iso: startDate.toISOString().split('T')[0],
       },
+    };
+  }
+
+  const isStopMedicationIntent = /\b(stop|discontinue|no longer (needs?|takes?|taking))\b/i.test(lower);
+
+  if (isStopMedicationIntent) {
+    const stop_times: TimeOfDay[] = [];
+    (['morning', 'afternoon', 'evening', 'night'] as TimeOfDay[]).forEach((t) => {
+      if (lower.includes(t)) stop_times.push(t);
+    });
+
+    let molecule = trimmed
+      .replace(/^(please\s+)?(stop|discontinue|no longer (needs?|takes?|taking))\s+/i, '')
+      .replace(/\b(the|taking|dose|doses|of)\b/gi, ' ')
+      .replace(/\b(morning|afternoon|evening|night)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!molecule) molecule = trimmed;
+
+    return {
+      type: 'medication_stop_draft',
+      message: "I'm offline right now, so I've drafted this from what you typed — check it matches the right medicine before confirming.",
+      medicationStop: { molecule, stop_times: stop_times.length > 0 ? stop_times : undefined },
     };
   }
 

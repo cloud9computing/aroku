@@ -6,11 +6,13 @@ import {
   IconClock,
   IconList,
   IconMoonStars,
+  IconPill,
   IconSun,
   IconSunrise,
   IconSunset,
 } from '@tabler/icons-react';
 import { MedicationDetailModal } from './MedicationDetailModal';
+import { EmptyState } from '../common/EmptyState';
 import { isCourseEnded } from '../../utils/medicationSchedule';
 import { medicineDisplayName } from '../../utils/medicineName';
 
@@ -18,6 +20,7 @@ interface MedicinesTabProps {
   medications: Medication[];
   onUpdateMedication: (med: Medication) => void;
   onDeleteMedication: (medId: string) => void;
+  onOpenCapture: () => void;
 }
 
 function renderFoodRelation(relation: string) {
@@ -58,6 +61,7 @@ export const MedicinesTab: React.FC<MedicinesTabProps> = ({
   medications,
   onUpdateMedication,
   onDeleteMedication,
+  onOpenCapture,
 }) => {
   const [viewMode, setViewMode] = useState<'today' | 'all'>('today');
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
@@ -109,6 +113,7 @@ export const MedicinesTab: React.FC<MedicinesTabProps> = ({
   return (
     <div className="flex flex-col flex-1 min-h-0 pb-4">
       {/* Subheader Context Text & Toggle */}
+      {medications.length > 0 && (
       <div className="px-4.5 pt-3 pb-2 flex items-center justify-between select-none">
         <span className="text-[10px] text-ink-200 font-medium">
           {totalDosesToday} doses today
@@ -140,8 +145,19 @@ export const MedicinesTab: React.FC<MedicinesTabProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Content */}
+      {medications.length === 0 ? (
+        <EmptyState
+          icon={<IconPill size={24} />}
+          color="sage"
+          title="No medicines yet"
+          description="Scan a prescription, or just tell Aroku what you're taking — it'll always check with you before adding anything."
+          ctaLabel="Capture a prescription"
+          onCta={onOpenCapture}
+        />
+      ) : (
       <div className="px-4.5 flex-1 min-h-0 overflow-y-auto space-y-4">
         {viewMode === 'today' ? (
           <>
@@ -270,6 +286,7 @@ export const MedicinesTab: React.FC<MedicinesTabProps> = ({
           </div>
         )}
       </div>
+      )}
 
       <MedicationDetailModal
         medication={selectedMedication}
